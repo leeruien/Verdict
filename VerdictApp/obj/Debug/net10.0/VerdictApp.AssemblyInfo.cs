@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("VerdictApp")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+ffd0c71247b4371c08e6afed8f75867030c13865")]
 [assembly: System.Reflection.AssemblyProductAttribute("VerdictApp")]
 [assembly: System.Reflection.AssemblyTitleAttribute("VerdictApp")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
