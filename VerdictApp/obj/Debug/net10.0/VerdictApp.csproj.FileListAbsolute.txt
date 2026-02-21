@@ -83,3 +83,4 @@
 /Users/joylee/Documents/62413/Project/VerdictApp/obj/Debug/net10.0/VerdictApp.pdb
 /Users/joylee/Documents/62413/Project/VerdictApp/obj/Debug/net10.0/VerdictApp.genruntimeconfig.cache
 /Users/joylee/Documents/62413/Project/VerdictApp/obj/Debug/net10.0/ref/VerdictApp.dll
+/Users/joylee/Documents/62413/Project/VerdictApp/obj/Debug/net10.0/VerdictApp.sourcelink.json
