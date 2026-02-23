@@ -1,7 +1,16 @@
 ﻿@page "/"
 
-<PageTitle>Home</PageTitle>
+<PageTitle>Login</PageTitle>
 
-<h1>Verdict</h1>
+<h1>Login</h1>
+<InputText @bind-Value="username" placeholder = "Username"/>
+<InputText @bind-Value="password" placeholder = "Password"/>
+@* <button>Login</button>
+<button>Register</button> *@
 
-Welcome to your new app.
+Welcome to Verdict!
+
+@code {
+    private string username;
+    private string password;
+}
