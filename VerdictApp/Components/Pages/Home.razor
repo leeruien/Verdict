@@ -1,16 +1,12 @@
 ﻿@page "/"
+@attribute [Authorize]
 
-<PageTitle>Login</PageTitle>
+<PageTitle>Verdict</PageTitle>
 
-<h1>Login</h1>
-<InputText @bind-Value="username" placeholder = "Username"/>
-<InputText @bind-Value="password" placeholder = "Password"/>
-@* <button>Login</button>
-<button>Register</button> *@
+<h1>Welcome to Verdict!</h1>
 
-Welcome to Verdict!
-
-@code {
-    private string username;
-    private string password;
-}
+<AuthorizeView>
+    <Authorized>
+        <p>You’re logged in.</p>
+    </Authorized>
+</AuthorizeView>

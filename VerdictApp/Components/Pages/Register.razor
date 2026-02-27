@@ -1,0 +1,35 @@
+@page "/register"
+@using Microsoft.AspNetCore.Identity
+@inject UserManager<IdentityUser> UserManager
+@inject NavigationManager Nav
+
+<h3>Register</h3>
+
+<input @bind="Email" placeholder="Email" />
+<br />
+<input type="password" @bind="Password" placeholder="Password" />
+<br />
+<button @onclick="HandleRegister">Create account</button>
+
+<p style="color:red">@Error</p>
+
+@code {
+    string Email = "";
+    string Password = "";
+    string? Error;
+
+    async Task HandleRegister()
+    {
+        Error = null;
+        var user = new IdentityUser { UserName = Email, Email = Email };
+        var result = await UserManager.CreateAsync(user, Password);
+
+        if (!result.Succeeded)
+        {
+            Error = string.Join("; ", result.Errors.Select(e => e.Description));
+            return;
+        }
+
+        Nav.NavigateTo("/login");
+    }
+}

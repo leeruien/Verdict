@@ -1,0 +1,36 @@
+﻿@page "/login"
+@using Microsoft.AspNetCore.Identity
+@inject SignInManager<IdentityUser> SignInManager
+@inject NavigationManager Nav
+
+<h3>Login</h3>
+
+<input @bind="Email" placeholder="Email" />
+<br />
+<input type="password" @bind="Password" placeholder="Password" />
+<br />
+<button @onclick="HandleLogin">Login</button>
+
+<p style="color:red">@Error</p>
+
+@code {
+    string Email = "";
+    string Password = "";
+    string? Error;
+
+    async Task HandleLogin()
+    {
+        Error = null;
+
+        var result = await SignInManager.PasswordSignInAsync(
+            Email, Password, isPersistent: true, lockoutOnFailure: false);
+
+        if (!result.Succeeded)
+        {
+            Error = "Invalid login.";
+            return;
+        }
+
+        Nav.NavigateTo("/");
+    }
+}
