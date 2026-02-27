@@ -20,7 +20,7 @@ builder.Services
         options =>
         {
             options.User.RequireUniqueEmail = true;
-            // options.SignIn.RequireConfirmedEmail = true;
+            // options.SignIn.RequireConfirmedEmail = true;P12
         }
     )
     .AddEntityFrameworkStores<ApplicationDbContext>()

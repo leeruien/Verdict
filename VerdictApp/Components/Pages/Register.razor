@@ -1,35 +1,99 @@
 @page "/register"
+@using System.ComponentModel.DataAnnotations
 @using Microsoft.AspNetCore.Identity
 @inject UserManager<IdentityUser> UserManager
+@inject SignInManager<IdentityUser> SignInManager
 @inject NavigationManager Nav
+@inject AuthenticationStateProvider AuthStateProvider
+
+<PageTitle>Register</PageTitle>
 
 <h3>Register</h3>
+@if (isAuthed)
+{
+    <p>You’re already signed in.</p>
+    <a href="/">Go home</a>
+}
+else
+{<EditForm Model="@model" OnValidSubmit="HandleRegister" FormName = "RegisterForm">
+    <DataAnnotationsValidator />
+    <ValidationSummary />
 
-<input @bind="Email" placeholder="Email" />
-<br />
-<input type="password" @bind="Password" placeholder="Password" />
-<br />
-<button @onclick="HandleRegister">Create account</button>
+    <div style="margin-bottom:8px;">
+        <label>Email</label><br />
+        <InputText @bind-Value="model.Email" />
+    </div>
 
-<p style="color:red">@Error</p>
+    <div style="margin-bottom:8px;">
+        <label>Password</label><br />
+        <InputText type="password" @bind-Value="model.Password" />
+    </div>
+
+    <div style="margin-bottom:8px;">
+        <label>Confirm Password</label><br />
+        <InputText type="password" @bind-Value="model.ConfirmPassword" />
+    </div>
+
+    <button type="submit" disabled="@isBusy">Create account</button>
+</EditForm>
+@if (!string.IsNullOrWhiteSpace(error))
+{
+    <p style="color:red">@error</p>
+}
+
+}
+
+
+
+<p>
+    Already have an account?
+    <a href="/login">Login</a>
+</p>
 
 @code {
-    string Email = "";
-    string Password = "";
-    string? Error;
+    @* [SupplyParameterFromForm(FormName = "RegisterForm")] *@
+    @* public RegisterModel model {get; set;} = new(); *@
+    private RegisterModel model = new();
+    private string? error;
+    private bool isBusy;
+    private bool isAuthed;
 
-    async Task HandleRegister()
+    private async Task HandleRegister()
     {
-        Error = null;
-        var user = new IdentityUser { UserName = Email, Email = Email };
-        var result = await UserManager.CreateAsync(user, Password);
+        error = null;
+        isBusy = true;
+        Console.WriteLine($"Attempting to register");
+
+        var user = new IdentityUser
+        {
+            UserName = model.Email,
+            Email = model.Email
+        };
+
+        var result = await UserManager.CreateAsync(user, model.Password);
 
         if (!result.Succeeded)
         {
-            Error = string.Join("; ", result.Errors.Select(e => e.Description));
+            Console.WriteLine("Failed to register user:");
+            error = string.Join(" | ", result.Errors.Select(e => e.Description));
+            isBusy = false;
             return;
         }
 
-        Nav.NavigateTo("/login");
+        // auto-login after register (nice for testing)
+        await SignInManager.SignInAsync(user, isPersistent: true);
+        Nav.NavigateTo("/");
+    }
+
+    private class RegisterModel
+    {
+        [Required, EmailAddress]
+        public string Email { get; set; } = "";
+
+        [Required, MinLength(8)]
+        public string Password { get; set; } = "";
+
+        [Required, Compare(nameof(Password))]
+        public string ConfirmPassword { get; set; } = "";
     }
 }

@@ -1,0 +1,24 @@
+@page "/logout"
+@using Microsoft.AspNetCore.Identity
+@inject SignInManager<IdentityUser> SignInManager
+@inject NavigationManager Nav
+
+<PageTitle>Logout</PageTitle>
+
+<div class="container">
+    <p>Are you sure you want to log out?</p>
+    
+    @* We use a standard HTML form here to ensure a POST request is sent *@
+    <form action="Account/Logout" method="post">
+        <AntiforgeryToken />
+        <button type="submit" class="btn btn-danger">Confirm Logout</button>
+    </form>
+</div>
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        await SignInManager.SignOutAsync();
+        Nav.NavigateTo("/login", forceLoad: true);
+    }
+}
