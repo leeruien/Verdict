@@ -15,7 +15,7 @@
     <a href="/">Go home</a>
 }
 else
-{<EditForm Model="@model" OnValidSubmit="HandleRegister" FormName = "RegisterForm">
+{<EditForm Model="@model" OnValidSubmit="@HandleRegister" FormName = "RegisterForm">
     <DataAnnotationsValidator />
     <ValidationSummary />
 
@@ -24,9 +24,18 @@ else
         <InputText @bind-Value="model.Email" />
     </div>
 
-    <div style="margin-bottom:8px;">
+    <div style="margin-bottom:8px; position:relative;">
         <label>Password</label><br />
-        <InputText type="password" @bind-Value="model.Password" />
+
+        <InputText type="@PasswordInputType"
+                @bind-Value="model.Password"
+                class="form-control" />
+
+        <button type="button"
+                class="btn btn-light position-absolute end-0 top-50 translate-middle-y"
+                @onclick="TogglePassword">
+            <img src="@EyeIcon" width="20" />
+        </button>
     </div>
 
     <div style="margin-bottom:8px;">
@@ -51,12 +60,16 @@ else
 </p>
 
 @code {
-    @* [SupplyParameterFromForm(FormName = "RegisterForm")] *@
-    @* public RegisterModel model {get; set;} = new(); *@
-    private RegisterModel model = new();
+    [SupplyParameterFromForm(FormName = "RegisterForm")]
+    public RegisterModel model {get; set;} = new();
+    @* private RegisterModel model = new(); *@
     private string? error;
     private bool isBusy;
     private bool isAuthed;
+    bool showPassword = false;
+    string PasswordInputType => showPassword ? "text" : "password";
+    string EyeIcon => showPassword ? "icons/hide.png" : "wwwroot/icons/view.png";
+    void TogglePassword() => showPassword = !showPassword;
 
     private async Task HandleRegister()
     {
@@ -85,7 +98,7 @@ else
         Nav.NavigateTo("/");
     }
 
-    private class RegisterModel
+    public class RegisterModel
     {
         [Required, EmailAddress]
         public string Email { get; set; } = "";
