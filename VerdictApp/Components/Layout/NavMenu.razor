@@ -1,4 +1,8 @@
 ﻿using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Identity
+@inject SignInManager<IdentityUser> SignInManager
+@inject NavigationManager Nav
 
 <div class="top-row ps-3 navbar navbar-dark">
     <div class="container-fluid">
@@ -19,7 +23,9 @@
     <AuthorizeView>
         <Authorized>
             <div class="nav-item px-3">
-                <NavLink class="nav-link" href="logout">Logout</NavLink>
+                <button type="button" class="nav-link btn btn-link p-0" @onclick="() => showLogoutConfirm = true">
+                    Logout
+                </button>
             </div>
         </Authorized>
 
@@ -35,3 +41,40 @@
     </nav>
 </div>
 
+@if (showLogoutConfirm)
+{
+    <div class="logout-overlay" @onclick="CloseIfBackdrop">
+        <div class="logout-popup" @onclick:stopPropagation="true">
+            <h4>Confirm Logout</h4>
+            <p>Are you sure you want to log out?</p>
+
+            <button class="btn btn-danger" @onclick="ConfirmLogout" disabled="@isBusy">
+                Yes, Logout
+            </button>
+
+            <button class="btn btn-secondary" @onclick="CancelLogout" disabled="@isBusy">
+                Cancel
+            </button>
+        </div>
+    </div>
+}
+
+@code {
+    private bool showLogoutConfirm;
+    private bool isBusy;
+
+    private async Task ConfirmLogout()
+    {
+        isBusy = true;
+        await SignInManager.SignOutAsync();
+        showLogoutConfirm = false;
+        isBusy = false;
+
+        // force reload so auth/menu updates instantly
+        Nav.NavigateTo("/login", forceLoad: true);
+    }
+
+    private void CancelLogout() => showLogoutConfirm = false;
+
+    private void CloseIfBackdrop() => showLogoutConfirm = false;
+}

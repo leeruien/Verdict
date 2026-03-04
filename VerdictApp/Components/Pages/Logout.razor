@@ -5,20 +5,39 @@
 
 <PageTitle>Logout</PageTitle>
 
-<div class="container">
-    <p>Are you sure you want to log out?</p>
-    
-    @* We use a standard HTML form here to ensure a POST request is sent *@
-    <form action="Account/Logout" method="post">
-        <AntiforgeryToken />
-        <button type="submit" class="btn btn-danger">Confirm Logout</button>
-    </form>
-</div>
+@if (!showConfirm)
+{
+    <p>Preparing logout...</p>
+}
+else
+{
+    <div class="logout-overlay">
+        <div class="logout-popup">
+            <h4>Confirm Logout</h4>
+            <p>Are you sure you want to log out?</p>
+
+            <button class="btn btn-danger" @onclick="ConfirmLogout">
+                Yes, Logout
+            </button>
+
+            <button class="btn btn-secondary" @onclick="CancelLogout">
+                Cancel
+            </button>
+        </div>
+    </div>
+}
 
 @code {
-    protected override async Task OnInitializedAsync()
+    private bool showConfirm = true;
+
+    private async Task ConfirmLogout()
     {
         await SignInManager.SignOutAsync();
         Nav.NavigateTo("/login", forceLoad: true);
+    }
+
+    private void CancelLogout()
+    {
+        Nav.NavigateTo("/");
     }
 }
