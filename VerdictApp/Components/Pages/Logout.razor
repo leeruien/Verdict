@@ -1,6 +1,5 @@
 @page "/logout"
-@using Microsoft.AspNetCore.Identity
-@inject SignInManager<IdentityUser> SignInManager
+@rendermode InteractiveServer
 @inject NavigationManager Nav
 
 <PageTitle>Logout</PageTitle>
@@ -30,14 +29,16 @@ else
 @code {
     private bool showConfirm = true;
 
-    private async Task ConfirmLogout()
+    private void ConfirmLogout()
     {
-        await SignInManager.SignOutAsync();
-        Nav.NavigateTo("/login", forceLoad: true);
+        // Redirect to a server endpoint that performs the logout.
+        // We use forceLoad to perform a full page navigation so the authentication cookie is cleared server-side.
+        Nav.NavigateTo("/account/logout", forceLoad: true);
     }
 
     private void CancelLogout()
     {
+        // Navigate back to home if the user cancels
         Nav.NavigateTo("/");
     }
 }

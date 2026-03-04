@@ -2,7 +2,5 @@
 
 @code {
     protected override void OnInitialized()
-    {
-        Nav.NavigateTo("/login", forceLoad: true);
-    }
+        => Nav.NavigateTo("/login", forceLoad: true);
 }

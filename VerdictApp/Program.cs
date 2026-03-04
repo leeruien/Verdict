@@ -1,7 +1,9 @@
 using VerdictApp.Components;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.EntityFrameworkCore;
 using VerdictApp.Data;
+using Microsoft.AspNetCore.Mvc;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -32,7 +34,8 @@ builder.Services.AddAuthentication(IdentityConstants.ApplicationScheme)
 
 builder.Services.AddAuthorization();
 builder.Services.AddCascadingAuthenticationState();
-
+builder.Services.AddAntiforgery();
+builder.Services.AddRazorPages();
 
 var app = builder.Build();
 
@@ -46,14 +49,85 @@ if (!app.Environment.IsDevelopment())
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
 app.UseHttpsRedirection();
 
-app.UseAntiforgery();
 app.UseAuthentication();
 app.UseAuthorization();
-
+app.UseAntiforgery();
 app.MapStaticAssets();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
+
+// Logout endpoint: perform SignOut on the server and redirect to login.
+// We expose a simple GET endpoint so components can navigate to it with forceLoad to clear the cookie.
+app.MapGet("/account/logout", async (SignInManager<IdentityUser> signInManager, HttpContext http) =>
+{
+    // Perform sign-out server-side and return an explicit redirect result.
+    // Call both SignInManager and the authentication scheme sign-out to ensure the cookie is cleared.
+    await signInManager.SignOutAsync();
+    try
+    {
+        await http.SignOutAsync(IdentityConstants.ApplicationScheme);
+    }
+    catch
+    {
+        // ignore if scheme not registered or sign-out fails here; SignInManager already attempts sign-out
+    }
+
+    return Results.Redirect("/login");
+});
+
+
+// app.MapPost("/account/login", async (
+//     UserManager<IdentityUser> userManager,
+//     SignInManager<IdentityUser> signInManager,
+//     [FromForm] string email,
+//     [FromForm] string password,
+//     [FromForm] bool rememberMe) =>
+// {
+//     var user = await userManager.FindByEmailAsync(email);
+//     if (user is null) return Results.Redirect("/login?error=invalid");
+
+//     var result = await signInManager.PasswordSignInAsync(
+//         user.UserName!, password, isPersistent: rememberMe, lockoutOnFailure: false);
+
+//     return result.Succeeded
+//         ? Results.Redirect("/")
+//         : Results.Redirect("/login?error=1");
+// });
+
+
+// app.MapPost("/account/register", async (
+//     UserManager<IdentityUser> userManager,
+//     SignInManager<IdentityUser> signInManager,
+//     [FromForm] string email,
+//     [FromForm] string password) =>
+// {
+//     var user = new IdentityUser { UserName = email, Email = email };
+//     var create = await userManager.CreateAsync(user, password);
+
+//     if (!create.Succeeded)
+//         return Results.Redirect("/register?error=1");
+
+//     await signInManager.SignInAsync(user, isPersistent: false);
+//     return Results.Redirect("/");
+// });
+
+// Debug endpoint: returns number of Identity users (helps verify DB connectivity and Identity setup)
+app.MapGet("/debug/users", async (IServiceProvider services) =>
+{
+    try
+    {
+        using var scope = services.CreateScope();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<IdentityUser>>();
+        var usersQuery = userManager.Users;
+        var count = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.CountAsync(usersQuery);
+        return Results.Ok(new { userCount = count });
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem(detail: ex.ToString());
+    }
+});
 // test user
 using (var scope = app.Services.CreateScope())
 {
@@ -74,4 +148,8 @@ using (var scope = app.Services.CreateScope())
     }
 }
 
+
+
 app.Run();
+
+public record LoginDto(string Email, string Password, bool RememberMe);
