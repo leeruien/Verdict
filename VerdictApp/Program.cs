@@ -55,8 +55,7 @@ app.UseAntiforgery();
 app.MapStaticAssets();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
-
-
+app.UseStaticFiles();
 // Logout endpoint: perform SignOut on the server and redirect to login.
 // We expose a simple GET endpoint so components can navigate to it with forceLoad to clear the cookie.
 app.MapGet("/account/logout", async (SignInManager<IdentityUser> signInManager, HttpContext http) =>
@@ -76,7 +75,23 @@ app.MapGet("/account/logout", async (SignInManager<IdentityUser> signInManager, 
     return Results.Redirect("/login");
 });
 
+// app.MapPost("/account/login", async (
+//     UserManager<IdentityUser> userManager,
+//     SignInManager<IdentityUser> signInManager,
+//     [FromForm] string email,
+//     [FromForm] string password,
+//     [FromForm] bool rememberMe) =>
+// {
+//     var user = await userManager.FindByEmailAsync(email);
+//     if (user is null) return Results.Redirect("/login?error=invalid");
 
+//     var result = await signInManager.PasswordSignInAsync(
+//         user.UserName!, password, isPersistent: rememberMe, lockoutOnFailure: false);
+
+//     return result.Succeeded
+//         ? Results.Redirect("/")
+//         : Results.Redirect("/login?error=1");
+// });
 // app.MapPost("/account/login", async (
 //     UserManager<IdentityUser> userManager,
 //     SignInManager<IdentityUser> signInManager,
