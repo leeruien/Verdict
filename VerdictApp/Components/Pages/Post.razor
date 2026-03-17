@@ -191,6 +191,7 @@
             UserId = user.Id,
             Title = title,
             Description = description,
+            Category = selectedCategory,
             ExpiresAt = DateTime.UtcNow.AddHours(selectedHours),
             CreatedAt = DateTime.UtcNow,
             Options = validOptions.Select(o => new DilemmaOption

@@ -1,12 +1,388 @@
 ﻿@page "/"
-@attribute [Authorize]
+@rendermode InteractiveServer
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.EntityFrameworkCore
+@using VerdictApp.Data
+@using VerdictApp.Models
+@inject UserManager<ApplicationUser> UserManager
+@inject AuthenticationStateProvider AuthStateProvider
+@inject ApplicationDbContext Db
+@inject NavigationManager Nav
 
-<PageTitle>Verdict</PageTitle>
+<div class="home-page">
 
-<h1>Welcome to Verdict!</h1>
+    <div class="home-header">
+        <h1>⚖ VerdictApp</h1>
+        <p>Help others decide — vote on their dilemmas</p>
+    </div>
 
-<AuthorizeView>
-    <Authorized>
-        <p>You’re logged in.</p>
-    </Authorized>
-</AuthorizeView>
+    <div class="filter-bar">
+        <button class="filter-btn @(activeFilter == "all" ? "active" : "")"
+                @onclick='() => SetFilter("all")'>All</button>
+        @foreach (var cat in categories)
+        {
+            <button class="filter-btn @(activeFilter == cat.Value ? "active" : "")"
+                    @onclick="() => SetFilter(cat.Value)">
+                @cat.Icon @cat.Label
+            </button>
+        }
+    </div>
+
+    @if (dilemmas == null)
+    {
+        <p class="loading">Loading dilemmas...</p>
+    }
+    else if (!dilemmas.Any())
+    {
+        <p class="empty-state">No dilemmas yet. <a href="/post">Be the first to post one!</a></p>
+    }
+    else
+    {
+        @foreach (var dilemma in dilemmas)
+        {
+            var totalVotesOnCard = dilemma.Options.Sum(o => o.Votes.Count);
+            var isOwner = dilemma.UserId == currentUserId;
+            var expired = IsExpired(dilemma);
+            var votedOnThis = HasVotedOnDilemma(dilemma);
+
+            <div class="dilemma-card @(isOwner ? "own-post" : "")">
+
+                <div class="dilemma-meta">
+                    @if (isOwner)
+                    {
+                        <span class="your-post-badge">Your post</span>
+                    }
+                    @if (!string.IsNullOrEmpty(dilemma.Category))
+                    {
+                        <span class="category-tag">@GetCategoryIcon(dilemma.Category) @dilemma.Category</span>
+                    }
+                    <span class="time-left">⏱ @GetTimeLeft(dilemma.ExpiresAt)</span>
+                </div>
+
+                <h2 class="dilemma-title">@dilemma.Title</h2>
+
+                @if (!string.IsNullOrWhiteSpace(dilemma.Description))
+                {
+                    <p class="dilemma-desc">@dilemma.Description</p>
+                }
+
+                <div class="options-list">
+                    @foreach (var option in dilemma.Options)
+                    {
+                        var optionVotes = option.Votes.Count;
+                        var percent = totalVotesOnCard > 0
+                            ? (int)Math.Round((double)optionVotes / totalVotesOnCard * 100)
+                            : 0;
+                        var userVotedThis = userVotedOptionIds.Contains(option.Id);
+
+                        <button class="option-btn @(userVotedThis ? "voted" : "") @(votedOnThis && !userVotedThis ? "dimmed" : "")"
+                                @onclick="() => CastVote(dilemma, option)"
+                                disabled="@(votedOnThis || isOwner || expired)">
+                            <div class="option-content">
+                                <span class="option-text">@option.OptionText</span>
+                                @if (votedOnThis)
+                                {
+                                    <span class="option-percent">@percent%</span>
+                                }
+                            </div>
+                            @if (votedOnThis)
+                            {
+                                <div class="progress-bar">
+                                    <div class="progress-fill @(userVotedThis ? "fill-voted" : "")"
+                                         style="width: @(percent)%"></div>
+                                </div>
+                            }
+                        </button>
+                    }
+                </div>
+
+                <div class="dilemma-footer">
+                    <span>@totalVotesOnCard votes</span>
+                    <span>@dilemma.Comments.Count comments</span>
+                    @if (expired)
+                    {
+                        <span class="expired-tag">Expired</span>
+                    }
+                </div>
+
+            </div>
+        }
+    }
+
+</div>
+
+@code {
+    private List<Dilemma>? dilemmas;
+    private string? currentUserId;
+    private HashSet<Guid> userVotedOptionIds = new();
+    private string activeFilter = "all";
+
+    private record CategoryOption(string Value, string Label, string Icon);
+
+    private List<CategoryOption> categories = new()
+    {
+        new("life",          "Life",          "🌱"),
+        new("career",        "Career",        "💼"),
+        new("finance",       "Finance",       "💰"),
+        new("relationships", "Relationships", "❤️"),
+        new("travel",        "Travel",        "✈️"),
+        new("health",        "Health",        "🏃"),
+        new("tech",          "Tech",          "💻"),
+        new("other",         "Other",         "🤔"),
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = await UserManager.GetUserAsync(authState.User);
+        currentUserId = user?.Id;
+
+        if (currentUserId != null)
+        {
+            var myVotes = await Db.Votes
+                .Where(v => v.UserId == currentUserId)
+                .Select(v => v.DilemmaOptionId)
+                .ToListAsync();
+            userVotedOptionIds = myVotes.ToHashSet();
+        }
+
+        await LoadDilemmas();
+    }
+
+    private async Task LoadDilemmas()
+    {
+        var query = Db.Dilemmas
+            .Include(d => d.Options).ThenInclude(o => o.Votes)
+            .Include(d => d.Comments)
+            .AsQueryable();
+
+        if (activeFilter != "all")
+            query = query.Where(d => d.Category == activeFilter);
+
+        var all = await query
+            .OrderByDescending(d => d.CreatedAt)
+            .ToListAsync();
+
+        dilemmas = all
+            .OrderByDescending(d => d.UserId == currentUserId)
+            .ThenByDescending(d => d.CreatedAt)
+            .ToList();
+    }
+
+    private async Task SetFilter(string filter)
+    {
+        activeFilter = filter;
+        await LoadDilemmas();
+    }
+
+    private async Task CastVote(Dilemma dilemma, DilemmaOption option)
+    {
+        if (currentUserId == null) { Nav.NavigateTo("/login"); return; }
+        if (HasVotedOnDilemma(dilemma)) return;
+        if (IsExpired(dilemma)) return;
+
+        var vote = new Vote
+        {
+            Id = Guid.NewGuid(),
+            UserId = currentUserId,
+            DilemmaOptionId = option.Id,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        Db.Votes.Add(vote);
+        await Db.SaveChangesAsync();
+
+        userVotedOptionIds.Add(option.Id);
+        option.Votes.Add(vote);
+
+        StateHasChanged();
+    }
+
+    private bool HasVotedOnDilemma(Dilemma dilemma) =>
+        dilemma.Options.Any(o => userVotedOptionIds.Contains(o.Id));
+
+    private bool IsExpired(Dilemma dilemma) =>
+        dilemma.ExpiresAt.HasValue && dilemma.ExpiresAt.Value < DateTime.UtcNow;
+
+    private string GetTimeLeft(DateTime? expiresAt)
+    {
+        if (!expiresAt.HasValue) return "No limit";
+        var diff = expiresAt.Value - DateTime.UtcNow;
+        if (diff <= TimeSpan.Zero) return "Expired";
+        if (diff.TotalHours < 1) return $"{(int)diff.TotalMinutes}m left";
+        if (diff.TotalHours < 24) return $"{(int)diff.TotalHours}h left";
+        return $"{(int)diff.TotalDays}d left";
+    }
+
+    private string GetCategoryIcon(string? category) =>
+        categories.FirstOrDefault(c => c.Value == category)?.Icon ?? "🤔";
+}
+
+<style>
+    .home-page {
+        max-width: 680px;
+        margin: 2rem auto;
+        padding: 0 1rem;
+        font-family: Georgia, serif;
+    }
+
+    .home-header {
+        text-align: center;
+        margin-bottom: 2rem;
+    }
+
+    .home-header h1 { font-size: 2rem; margin: 0; }
+    .home-header p  { color: #888; margin: 0.25rem 0 0; }
+
+    .filter-bar {
+        display: flex;
+        gap: 0.4rem;
+        flex-wrap: wrap;
+        margin-bottom: 1.5rem;
+    }
+
+    .filter-btn {
+        padding: 0.4rem 0.85rem;
+        border: 1px solid #ddd;
+        border-radius: 20px;
+        background: white;
+        cursor: pointer;
+        font-size: 0.82rem;
+        transition: all 0.15s;
+    }
+
+    .filter-btn:hover  { border-color: #052767; background: #f0f4ff; }
+    .filter-btn.active { background: #052767; color: white; border-color: #052767; }
+
+    .dilemma-card {
+        border: 1px solid #e8e8e8;
+        border-radius: 12px;
+        padding: 1.25rem;
+        margin-bottom: 1rem;
+        transition: box-shadow 0.2s;
+    }
+
+    .dilemma-card:hover   { box-shadow: 0 2px 16px rgba(0,0,0,0.08); }
+    .dilemma-card.own-post { border-color: #052767; border-width: 2px; }
+
+    .dilemma-meta {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+        margin-bottom: 0.5rem;
+    }
+
+    .your-post-badge {
+        background: #052767;
+        color: white;
+        font-size: 0.72rem;
+        padding: 2px 8px;
+        border-radius: 20px;
+        font-weight: 600;
+    }
+
+    .category-tag {
+        background: #f0f4ff;
+        color: #052767;
+        font-size: 0.78rem;
+        padding: 2px 8px;
+        border-radius: 20px;
+        text-transform: capitalize;
+    }
+
+    .time-left {
+        font-size: 0.78rem;
+        color: #888;
+        margin-left: auto;
+    }
+
+    .dilemma-title {
+        font-size: 1.15rem;
+        margin: 0 0 0.5rem;
+        font-weight: 700;
+    }
+
+    .dilemma-desc {
+        font-size: 0.9rem;
+        color: #555;
+        margin: 0 0 0.75rem;
+    }
+
+    .options-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        margin-bottom: 0.75rem;
+    }
+
+    .option-btn {
+        width: 100%;
+        text-align: left;
+        background: #f9f9f9;
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+        padding: 0.6rem 0.85rem;
+        cursor: pointer;
+        transition: all 0.15s;
+    }
+
+    .option-btn:hover:not(:disabled) { border-color: #052767; background: #f0f4ff; }
+    .option-btn.voted   { border-color: #052767; background: #f0f4ff; }
+    .option-btn.dimmed  { opacity: 0.6; }
+    .option-btn:disabled { cursor: default; }
+
+    .option-content {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .option-text    { font-size: 0.92rem; }
+    .option-percent { font-size: 0.82rem; font-weight: 600; color: #052767; }
+
+    .progress-bar {
+        height: 3px;
+        background: #e0e0e0;
+        border-radius: 2px;
+        margin-top: 0.4rem;
+    }
+
+    .progress-fill {
+        height: 100%;
+        background: #ccc;
+        border-radius: 2px;
+        transition: width 0.4s ease;
+    }
+
+    .fill-voted { background: #052767; }
+
+    .dilemma-footer {
+        display: flex;
+        gap: 1rem;
+        font-size: 0.8rem;
+        color: #aaa;
+        margin-top: 0.5rem;
+    }
+
+    .expired-tag {
+        margin-left: auto;
+        color: #e06c75;
+        font-weight: 600;
+    }
+
+    .loading, .empty-state {
+        text-align: center;
+        color: #aaa;
+        padding: 3rem 0;
+        font-style: italic;
+    }
+
+    .empty-state a { color: #052767; }
+
+    @@media (max-width: 480px) {
+        .filter-bar { gap: 0.3rem; }
+        .filter-btn { font-size: 0.75rem; padding: 0.35rem 0.65rem; }
+    }
+</style>
