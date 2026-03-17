@@ -1,0 +1,222 @@
+@page "/profile"
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.EntityFrameworkCore
+@using VerdictApp.Data
+@using VerdictApp.Models
+@inject UserManager<ApplicationUser> UserManager
+@inject AuthenticationStateProvider AuthStateProvider
+@inject ApplicationDbContext Db
+@attribute [Authorize]
+
+@if (user == null)
+{
+    <p>Loading...</p>
+}
+else
+{
+    <div class="profile-page">
+
+        <div class="profile-header">
+            <div class="avatar">@user.UserName![0].ToString().ToUpper()</div>
+            <h1>@user.UserName</h1>
+            <p class="profile-email">@user.Email</p>
+        </div>
+
+        <div class="profile-tabs">
+            <button class="@TabClass("posts")" @onclick='() => activeTab = "posts"'>
+                Posts <span class="badge">@posts.Count</span>
+            </button>
+            <button class="@TabClass("votes")" @onclick='() => activeTab = "votes"'>
+                Votes <span class="badge">@votes.Count</span>
+            </button>
+            <button class="@TabClass("comments")" @onclick='() => activeTab = "comments"'>
+                Comments <span class="badge">@comments.Count</span>
+            </button>
+        </div>
+
+        <div class="profile-content">
+
+            @if (activeTab == "posts")
+            {
+                @if (!posts.Any())
+                {
+                    <p class="empty-state">You haven't posted any dilemmas yet.</p>
+                }
+                @foreach (var post in posts)
+                {
+                    <div class="card">
+                        <div class="card-title">@post.Title</div>
+                        <div class="card-meta">
+                            Posted @post.CreatedAt.ToString("MMM d, yyyy") ·
+                            @post.Options.Sum(o => o.Votes.Count) votes ·
+                            @post.Comments.Count comments
+                        </div>
+                    </div>
+                }
+            }
+
+            @if (activeTab == "votes")
+            {
+                @if (!votes.Any())
+                {
+                    <p class="empty-state">You haven't voted on anything yet.</p>
+                }
+                @foreach (var vote in votes)
+                {
+                    <div class="card">
+                        <div class="card-title">@vote.DilemmaOption.Dilemma.Title</div>
+                        <div class="card-meta">
+                            Voted for: <strong>@vote.DilemmaOption.OptionText</strong>
+                        </div>
+                        <div class="card-meta">@vote.CreatedAt.ToString("MMM d, yyyy")</div>
+                    </div>
+                }
+            }
+
+            @if (activeTab == "comments")
+            {
+                @if (!comments.Any())
+                {
+                    <p class="empty-state">You haven't commented yet.</p>
+                }
+                @foreach (var comment in comments)
+                {
+                    <div class="card">
+                        <div class="card-title">@comment.Dilemma.Title</div>
+                        <div class="card-body-text">@comment.Body</div>
+                        <div class="card-meta">@comment.CreatedAt.ToString("MMM d, yyyy")</div>
+                    </div>
+                }
+            }
+
+        </div>
+    </div>
+}
+
+@code {
+    private ApplicationUser? user;
+    private List<Dilemma> posts       = new();
+    private List<Vote> votes          = new();
+    private List<Comment> comments    = new();
+    private string activeTab          = "posts";
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        user = await UserManager.GetUserAsync(authState.User);
+
+        if (user != null)
+        {
+            posts = await Db.Dilemmas
+                .Where(d => d.UserId == user.Id)
+                .Include(d => d.Options).ThenInclude(o => o.Votes)
+                .Include(d => d.Comments)
+                .OrderByDescending(d => d.CreatedAt)
+                .ToListAsync();
+
+            votes = await Db.Votes
+                .Where(v => v.UserId == user.Id)
+                .Include(v => v.DilemmaOption).ThenInclude(o => o.Dilemma)
+                .OrderByDescending(v => v.CreatedAt)
+                .ToListAsync();
+
+            comments = await Db.Comments
+                .Where(c => c.UserId == user.Id)
+                .Include(c => c.Dilemma)
+                .OrderByDescending(c => c.CreatedAt)
+                .ToListAsync();
+        }
+    }
+
+    private string TabClass(string tab) =>
+        "tab-btn " + (activeTab == tab ? "active" : "");
+}
+
+<style>
+    .profile-page {
+        max-width: 700px;
+        margin: 2rem auto;
+        padding: 0 1rem;
+        font-family: Georgia, serif;
+    }
+
+    .profile-header {
+        text-align: center;
+        margin-bottom: 2rem;
+    }
+
+    .avatar {
+        width: 72px;
+        height: 72px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #052767, #3a0647);
+        color: white;
+        font-size: 2rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 1rem;
+    }
+
+    .profile-header h1 { margin: 0; font-size: 1.8rem; }
+    .profile-email     { color: #888; margin: 0.25rem 0 0; }
+
+    .profile-tabs {
+        display: flex;
+        border-bottom: 2px solid #e0e0e0;
+        margin-bottom: 1.5rem;
+        gap: 0.5rem;
+    }
+
+    .tab-btn {
+        background: none;
+        border: none;
+        padding: 0.6rem 1.2rem;
+        cursor: pointer;
+        font-size: 0.95rem;
+        color: #666;
+        border-bottom: 3px solid transparent;
+        margin-bottom: -2px;
+        transition: color 0.2s, border-color 0.2s;
+    }
+
+    .tab-btn.active {
+        color: #052767;
+        border-bottom-color: #052767;
+        font-weight: 600;
+    }
+
+    .badge {
+        background: #e0e0e0;
+        border-radius: 999px;
+        padding: 1px 7px;
+        font-size: 0.75rem;
+        margin-left: 4px;
+    }
+
+    .tab-btn.active .badge {
+        background: #052767;
+        color: white;
+    }
+
+    .card {
+        border: 1px solid #e8e8e8;
+        border-radius: 8px;
+        padding: 1rem 1.25rem;
+        margin-bottom: 0.75rem;
+        transition: box-shadow 0.2s;
+    }
+
+    .card:hover        { box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+    .card-title        { font-weight: 600; font-size: 1rem; margin-bottom: 0.35rem; }
+    .card-meta         { font-size: 0.82rem; color: #888; margin-top: 0.2rem; }
+    .card-body-text    { font-size: 0.9rem; color: #444; margin: 0.35rem 0; }
+
+    .empty-state {
+        text-align: center;
+        color: #aaa;
+        padding: 2rem 0;
+        font-style: italic;
+    }
+</style>

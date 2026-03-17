@@ -6,9 +6,17 @@
     </div>
 </div>
 
+
+
 <input type="checkbox" title="Navigation menu" class="navbar-toggler" />
 
 <div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
+@* <div class="nav-scrollable @(IsOpen ? "nav-open" : "")"> *@
+    @* <div class="nav-close-row">
+        <button class="nav-close-btn" @onclick="OnClose" aria-label="Close menu">
+            &#x2715;
+        </button>
+    </div> *@
     <nav class="nav flex-column">
         <div class="nav-item px-3">
             <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
@@ -19,8 +27,8 @@
     <AuthorizeView>
         <Authorized>
             <div class="nav-item px-3">
-                <NavLink class="nav-link" href="notification">Notification</NavLink>
                 <NavLink class="nav-link" href="profile">Profile</NavLink>
+                <NavLink class="nav-link" href="post">Post</NavLink>
                 <NavLink class="nav-link" href="inbox">Inbox</NavLink>
                 <NavLink class="nav-link" href="logout">Logout</NavLink>
             </div>
@@ -37,4 +45,5 @@
     </AuthorizeView>
     </nav>
 </div>
-
+@code {
+}

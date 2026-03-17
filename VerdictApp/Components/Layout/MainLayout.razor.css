@@ -56,6 +56,22 @@ main {
         height: 100vh;
         position: sticky;
         top: 0;
+        transition: width 0.3s ease;
+    }
+
+    .sidebar.collapsed {
+        width: 50px; 
+        overflow: hidden;
+    }
+
+    /* Optional: Hide text labels when collapsed so only icons show */
+    .sidebar.collapsed ::deep .nav-link {
+        font-size: 0; 
+        justify-content: center;
+    }
+    
+    .sidebar.collapsed ::deep .bi {
+        margin-right: 0;
     }
 
     .top-row {

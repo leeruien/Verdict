@@ -18,7 +18,7 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 
 // Add identity services
 builder.Services
-    .AddIdentityCore<IdentityUser>(
+    .AddIdentityCore<ApplicationUser>(
         options =>
         {
             options.User.RequireUniqueEmail = true;
@@ -26,7 +26,7 @@ builder.Services
         }
     )
     .AddEntityFrameworkStores<ApplicationDbContext>()
-    .AddSignInManager<SignInManager<IdentityUser>>()
+    .AddSignInManager<SignInManager<ApplicationUser>>()
     .AddDefaultTokenProviders();
 
 builder.Services.AddAuthentication(IdentityConstants.ApplicationScheme)
@@ -58,7 +58,7 @@ app.MapRazorComponents<App>()
 app.UseStaticFiles();
 // Logout endpoint: perform SignOut on the server and redirect to login.
 // We expose a simple GET endpoint so components can navigate to it with forceLoad to clear the cookie.
-app.MapGet("/account/logout", async (SignInManager<IdentityUser> signInManager, HttpContext http) =>
+app.MapGet("/account/logout", async (SignInManager<ApplicationUser> signInManager, HttpContext http) =>
 {
     // Perform sign-out server-side and return an explicit redirect result.
     // Call both SignInManager and the authentication scheme sign-out to ensure the cookie is cleared.
@@ -133,7 +133,7 @@ app.MapGet("/debug/users", async (IServiceProvider services) =>
     try
     {
         using var scope = services.CreateScope();
-        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<IdentityUser>>();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
         var usersQuery = userManager.Users;
         var count = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.CountAsync(usersQuery);
         return Results.Ok(new { userCount = count });
@@ -146,14 +146,14 @@ app.MapGet("/debug/users", async (IServiceProvider services) =>
 // test user
 using (var scope = app.Services.CreateScope())
 {
-    var userManager = scope.ServiceProvider.GetRequiredService<UserManager<IdentityUser>>();
+    var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
 
     var email = "test@test.com";
     var existing = await userManager.FindByEmailAsync(email);
 
     if (existing == null)
     {
-        var user = new IdentityUser
+        var user = new ApplicationUser
         {
             UserName = email,
             Email = email
