@@ -1,2 +1,424 @@
 @page "/post"
+@rendermode InteractiveServer
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.EntityFrameworkCore
+@using VerdictApp.Data
+@using VerdictApp.Models
+@inject UserManager<ApplicationUser> UserManager
+@inject AuthenticationStateProvider AuthStateProvider
+@inject ApplicationDbContext Db
+@inject NavigationManager Nav
 @attribute [Authorize]
+
+<div class="post-page">
+    <div class="post-header">
+        <h1>Post a Dilemma</h1>
+        <p>Ask the community to help you decide</p>
+    </div>
+
+    @if (!string.IsNullOrEmpty(successMessage))
+    {
+        <div class="alert-success">@successMessage</div>
+    }
+
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="alert-error">@errorMessage</div>
+    }
+
+    <div class="post-form">
+
+        <!-- Title -->
+        <div class="form-group">
+            <label>Your Dilemma <span class="required">*</span></label>
+            <input type="text" @bind="title" placeholder="e.g. Should I quit my job to travel the world?" class="form-input" />
+        </div>
+
+        <!-- Description -->
+        <div class="form-group">
+            <label>More context <span class="muted">(optional)</span></label>
+            <textarea @bind="description" placeholder="Give people more background so they can make a better decision..." class="form-textarea" rows="3"></textarea>
+        </div>
+
+        <!-- Category -->
+        <div class="form-group">
+            <label>Category <span class="required">*</span></label>
+            <div class="category-grid">
+                @foreach (var cat in categories)
+                {
+                    <button type="button"
+                            class="category-btn @(selectedCategory == cat.Value ? "selected" : "")"
+                            @onclick="() => selectedCategory = cat.Value">
+                        <span class="cat-icon">@cat.Icon</span>
+                        <span>@cat.Label</span>
+                    </button>
+                }
+            </div>
+        </div>
+
+        <!-- Time limit -->
+        <div class="form-group">
+            <label>Time limit <span class="required">*</span></label>
+            <div class="time-grid">
+                @foreach (var t in timeLimits)
+                {
+                    <button type="button"
+                            class="time-btn @(selectedHours == t.Hours ? "selected" : "")"
+                            @onclick="() => selectedHours = t.Hours">
+                        @t.Label
+                    </button>
+                }
+            </div>
+        </div>
+
+        <!-- Options -->
+        <div class="form-group">
+            <label>Choices <span class="required">*</span> <span class="muted">(min 2, max 5)</span></label>
+            @for (int i = 0; i < options.Count; i++)
+            {
+                var index = i;
+                <div class="option-row">
+                    <span class="option-letter">@((char)('A' + index))</span>
+                    <input type="text" value="@options[index]" @oninput="@(e => options[index] = e.Value?.ToString() ?? string.Empty)" placeholder="@("Choice " + (char)('A' + index))" class="form-input" />
+                    @if (options.Count > 2)
+                    {
+                        <button type="button" class="remove-btn" @onclick="() => RemoveOption(index)">✕</button>
+                    }
+                </div>
+            }
+            @if (options.Count < 5)
+            {
+                <button type="button" class="add-option-btn" @onclick="AddOption">
+                    + Add another choice
+                </button>
+            }
+        </div>
+
+        <!-- Submit -->
+        <button type="button"
+                class="submit-btn"
+                @onclick="HandleSubmit"
+                disabled="@isBusy">
+            @if (isBusy)
+            {
+                <span>Posting...</span>
+            }
+            else
+            {
+                <span>Post Dilemma ⚖</span>
+            }
+        </button>
+
+    </div>
+</div>
+
+@code {
+    private string title = "";
+    private string description = "";
+    private string selectedCategory = "";
+    private int selectedHours = 24;
+    private List<string> options = new() { "", "" };
+    private bool isBusy = false;
+    private string successMessage = "";
+    private string errorMessage = "";
+
+    private record CategoryOption(string Value, string Label, string Icon);
+    private record TimeLimit(int Hours, string Label);
+
+    private List<CategoryOption> categories = new()
+    {
+        new("life",     "Life",      "🌱"),
+        new("career",   "Career",    "💼"),
+        new("finance",  "Finance",   "💰"),
+        new("relationships", "Relationships", "❤️"),
+        new("travel",   "Travel",    "✈️"),
+        new("health",   "Health",    "🏃"),
+        new("tech",     "Tech",      "💻"),
+        new("other",    "Other",     "🤔"),
+    };
+
+    private List<TimeLimit> timeLimits = new()
+    {
+        new(1,   "1 hour"),
+        new(6,   "6 hours"),
+        new(24,  "24 hours"),
+        new(72,  "3 days"),
+        new(168, "1 week"),
+    };
+
+    private void AddOption() => options.Add("");
+    private void RemoveOption(int index) => options.RemoveAt(index);
+
+    private async Task HandleSubmit()
+    {
+        errorMessage = "";
+        successMessage = "";
+
+        // Validation
+        if (string.IsNullOrWhiteSpace(title))
+        {
+            errorMessage = "Please enter your dilemma.";
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(selectedCategory))
+        {
+            errorMessage = "Please select a category.";
+            return;
+        }
+        var validOptions = options.Where(o => !string.IsNullOrWhiteSpace(o)).ToList();
+        if (validOptions.Count < 2)
+        {
+            errorMessage = "Please enter at least 2 choices.";
+            return;
+        }
+
+        isBusy = true;
+
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = await UserManager.GetUserAsync(authState.User);
+
+        if (user == null)
+        {
+            errorMessage = "You must be logged in to post.";
+            isBusy = false;
+            return;
+        }
+
+        var dilemma = new Dilemma
+        {
+            Id = Guid.NewGuid(),
+            UserId = user.Id,
+            Title = title,
+            Description = description,
+            ExpiresAt = DateTime.UtcNow.AddHours(selectedHours),
+            CreatedAt = DateTime.UtcNow,
+            Options = validOptions.Select(o => new DilemmaOption
+            {
+                Id = Guid.NewGuid(),
+                OptionText = o
+            }).ToList()
+        };
+
+        Db.Dilemmas.Add(dilemma);
+        await Db.SaveChangesAsync();
+
+        successMessage = "Your dilemma has been posted!";
+        title = "";
+        description = "";
+        selectedCategory = "";
+        selectedHours = 24;
+        options = new() { "", "" };
+        isBusy = false;
+
+        await Task.Delay(1500);
+        Nav.NavigateTo("/");
+    }
+}
+
+<style>
+    .post-page {
+        max-width: 680px;
+        margin: 2rem auto;
+        padding: 0 1rem;
+        font-family: Georgia, serif;
+    }
+
+    .post-header {
+        margin-bottom: 2rem;
+    }
+
+    .post-header h1 {
+        margin: 0;
+        font-size: 2rem;
+    }
+
+    .post-header p {
+        color: #888;
+        margin: 0.25rem 0 0;
+    }
+
+    .post-form {
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+    }
+
+    .form-group {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .form-group label {
+        font-weight: 600;
+        font-size: 0.95rem;
+    }
+
+    .required { color: #e06c75; }
+    .muted    { color: #aaa; font-weight: normal; font-size: 0.85rem; }
+
+    .form-input {
+        padding: 0.65rem 0.9rem;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        font-size: 0.95rem;
+        font-family: Georgia, serif;
+        transition: border-color 0.2s;
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    .form-input:focus {
+        outline: none;
+        border-color: #052767;
+    }
+
+    .form-textarea {
+        padding: 0.65rem 0.9rem;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        font-size: 0.95rem;
+        font-family: Georgia, serif;
+        resize: vertical;
+        width: 100%;
+        box-sizing: border-box;
+        transition: border-color 0.2s;
+    }
+
+    .form-textarea:focus {
+        outline: none;
+        border-color: #052767;
+    }
+
+    /* Category grid */
+    .category-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 0.5rem;
+    }
+
+    .category-btn {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.25rem;
+        padding: 0.65rem 0.5rem;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        background: white;
+        cursor: pointer;
+        font-size: 0.82rem;
+        transition: all 0.15s;
+    }
+
+    .category-btn:hover  { border-color: #052767; background: #f0f4ff; }
+    .category-btn.selected { border-color: #052767; background: #052767; color: white; }
+    .cat-icon { font-size: 1.3rem; }
+
+    /* Time grid */
+    .time-grid {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+
+    .time-btn {
+        padding: 0.5rem 1rem;
+        border: 1px solid #ddd;
+        border-radius: 20px;
+        background: white;
+        cursor: pointer;
+        font-size: 0.88rem;
+        transition: all 0.15s;
+    }
+
+    .time-btn:hover   { border-color: #052767; background: #f0f4ff; }
+    .time-btn.selected { border-color: #052767; background: #052767; color: white; }
+
+    /* Options */
+    .option-row {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .option-letter {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        background: #052767;
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.8rem;
+        font-weight: 700;
+        flex-shrink: 0;
+    }
+
+    .remove-btn {
+        background: none;
+        border: none;
+        color: #aaa;
+        cursor: pointer;
+        font-size: 1rem;
+        padding: 0.25rem;
+        transition: color 0.2s;
+    }
+
+    .remove-btn:hover { color: #e06c75; }
+
+    .add-option-btn {
+        background: none;
+        border: 1px dashed #ccc;
+        border-radius: 8px;
+        padding: 0.6rem;
+        width: 100%;
+        cursor: pointer;
+        color: #888;
+        font-size: 0.9rem;
+        transition: all 0.2s;
+        margin-top: 0.25rem;
+    }
+
+    .add-option-btn:hover { border-color: #052767; color: #052767; }
+
+    /* Submit */
+    .submit-btn {
+        padding: 0.9rem;
+        background: #052767;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-size: 1rem;
+        font-family: Georgia, serif;
+        cursor: pointer;
+        transition: background 0.2s;
+    }
+
+    .submit-btn:hover    { background: #3a0647; }
+    .submit-btn:disabled { background: #aaa; cursor: not-allowed; }
+
+    /* Alerts */
+    .alert-success {
+        background: #d4edda;
+        color: #155724;
+        border: 1px solid #c3e6cb;
+        border-radius: 8px;
+        padding: 0.75rem 1rem;
+    }
+
+    .alert-error {
+        background: #f8d7da;
+        color: #721c24;
+        border: 1px solid #f5c6cb;
+        border-radius: 8px;
+        padding: 0.75rem 1rem;
+    }
+
+    @@media (max-width: 480px) {
+        .category-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+</style>
