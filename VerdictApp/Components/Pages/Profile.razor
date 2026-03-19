@@ -66,7 +66,7 @@ else
                 }
                 @foreach (var vote in votes)
                 {
-                    <div class="card">
+                    <div class="card" style="cursor:pointer" @onclick='()=>Nav.NavigateTo($"/dilemma/{vote.DilemmaOption.DilemmaId}")'>
                         <div class="card-title">@vote.DilemmaOption.Dilemma.Title</div>
                         <div class="card-meta">
                             Voted for: <strong>@vote.DilemmaOption.OptionText</strong>
@@ -84,7 +84,7 @@ else
                 }
                 @foreach (var comment in comments)
                 {
-                    <div class="card">
+                    <div class="card" style="cursor:pointer" @onclick='()=>Nav.NavigateTo($"/dilemma/{comment.DilemmaId}")'>
                         <div class="card-title">@comment.Dilemma.Title</div>
                         <div class="card-body-text">@comment.Body</div>
                         <div class="card-meta">@comment.CreatedAt.ToString("MMM d, yyyy")</div>

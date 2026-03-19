@@ -13,7 +13,7 @@
 <div class="home-page">
 
     <div class="home-header">
-        <h1>⚖ VerdictApp</h1>
+        <h1>⚖ Verdict</h1>
         <p>Help others decide — vote on their dilemmas</p>
     </div>
 
@@ -84,7 +84,7 @@
                                 disabled="@(votedOnThis || isOwner || expired)">
                             <div class="option-content">
                                 <span class="option-text">@option.OptionText</span>
-                                @if (votedOnThis)
+                                @if (votedOnThis || isOwner || expired)
                                 {
                                     <span class="option-percent">@percent%</span>
                                 }
@@ -194,8 +194,10 @@
         Db.Votes.Add(vote);
         await Db.SaveChangesAsync();
 
+        @* userVotedOptionIds.Add(option.Id);
+        option.Votes.Add(vote); *@
         userVotedOptionIds.Add(option.Id);
-        option.Votes.Add(vote);
+        await LoadDilemmas();
 
         StateHasChanged();
     }

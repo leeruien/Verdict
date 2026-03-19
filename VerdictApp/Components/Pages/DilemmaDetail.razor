@@ -9,7 +9,6 @@
 @inject AuthenticationStateProvider AuthStateProvider
 @inject ApplicationDbContext Db
 @inject NavigationManager Nav
-@* @inject IJSRuntime JS *@
 
 @if (dilemma == null)
 {
@@ -90,6 +89,7 @@ else
             {
                 <div class="comment-form">
                     <textarea @bind="newComment"
+                              @bind:event="oninput"
                               placeholder="Share your thoughts..."
                               class="comment-input"
                               rows="3"></textarea>
@@ -221,11 +221,6 @@ else
         isBusy = false;
         StateHasChanged();
     }
-
-    @* private async Task GoBack()
-    {
-        await JS.InvokeVoidAsync("history.back");
-    } *@
 
     private bool HasVoted() =>
         dilemma?.Options.Any(o => userVotedOptionIds.Contains(o.Id)) ?? false;
