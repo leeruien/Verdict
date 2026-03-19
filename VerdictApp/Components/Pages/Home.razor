@@ -60,7 +60,10 @@
                     <span class="time-left">⏱ @GetTimeLeft(dilemma.ExpiresAt)</span>
                 </div>
 
-                <h2 class="dilemma-title">@dilemma.Title</h2>
+                <h2 class="dilemma-title" style="cursor:pointer"
+                    @onclick='() => Nav.NavigateTo($"/dilemma/{dilemma.Id}")'>
+                    @dilemma.Title
+                </h2>
 
                 @if (!string.IsNullOrWhiteSpace(dilemma.Description))
                 {
@@ -89,8 +92,7 @@
                             @if (votedOnThis)
                             {
                                 <div class="progress-bar">
-                                    <div class="progress-fill @(userVotedThis ? "fill-voted" : "")"
-                                         style="width: @(percent)%"></div>
+                                    <div class="progress-fill @(userVotedThis ? "fill-voted" : "")" style="width: @(percent)%"></div>
                                 </div>
                             }
                         </button>
@@ -165,8 +167,7 @@
             .ToListAsync();
 
         dilemmas = all
-            .OrderByDescending(d => d.UserId == currentUserId)
-            .ThenByDescending(d => d.CreatedAt)
+            .OrderByDescending(d => d.CreatedAt)
             .ToList();
     }
 

@@ -7,6 +7,7 @@
 @using VerdictApp.Models
 @inject UserManager<ApplicationUser> UserManager
 @inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager Nav
 @inject ApplicationDbContext Db
 @attribute [Authorize]
 
@@ -46,7 +47,7 @@ else
                 }
                 @foreach (var post in posts)
                 {
-                    <div class="card">
+                    <div class="card" style="cursor:pointer" @onclick='()=>Nav.NavigateTo($"/dilemma/{post.Id}")'>
                         <div class="card-title">@post.Title</div>
                         <div class="card-meta">
                             Posted @post.CreatedAt.ToString("MMM d, yyyy") ·

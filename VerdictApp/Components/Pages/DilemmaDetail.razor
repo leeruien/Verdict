@@ -1,0 +1,465 @@
+@page "/dilemma/{Id:guid}"
+@rendermode InteractiveServer
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.EntityFrameworkCore
+@using System.Runtime.CompilerServices
+@using VerdictApp.Data
+@using VerdictApp.Models
+@inject UserManager<ApplicationUser> UserManager
+@inject AuthenticationStateProvider AuthStateProvider
+@inject ApplicationDbContext Db
+@inject NavigationManager Nav
+@* @inject IJSRuntime JS *@
+
+@if (dilemma == null)
+{
+    <p class="loading">Loading...</p>
+}
+else
+{
+    <div class="detail-page">
+        <a class="back-btn" href="javascript:history.back()">← Back</a>
+        @* <button class="back-btn" @onclick="GoBack">← Back</button> *@
+        <div class="detail-header">
+            <div class="detail-meta">
+                @if (!string.IsNullOrEmpty(dilemma.Category))
+                {
+                    <span class="category-tag">@GetCategoryIcon(dilemma.Category) @dilemma.Category</span>
+                }
+                <span class="time-left">⏱ @GetTimeLeft(dilemma.ExpiresAt)</span>
+            </div>
+            <h1 class="detail-title">@dilemma.Title</h1>
+            @if (!string.IsNullOrWhiteSpace(dilemma.Description))
+            {
+                <p class="detail-desc">@dilemma.Description</p>
+            }
+        </div>
+
+        <!-- Vote options -->
+        <div class="section">
+            <h2 class="section-title">Cast your vote</h2>
+            <div class="options-list">
+                @foreach (var option in dilemma.Options)
+                {
+                    var totalVotes = dilemma.Options.Sum(o => o.Votes.Count);
+                    var optionVotes = option.Votes.Count;
+                    var percent = totalVotes > 0
+                        ? (int)Math.Round((double)optionVotes / totalVotes * 100)
+                        : 0;
+                    var userVotedThis = userVotedOptionIds.Contains(option.Id);
+                    var hasVoted = HasVoted();
+                    var isOwner = dilemma.UserId == currentUserId;
+                    var expired = IsExpired();
+
+                    <button class="option-btn @(userVotedThis ? "voted" : "") @(hasVoted && !userVotedThis ? "dimmed" : "")"
+                            @onclick="() => CastVote(option)"
+                            disabled="@(hasVoted || isOwner || expired)">
+                        <div class="option-content">
+                            <span class="option-text">@option.OptionText</span>
+                            @if (hasVoted)
+                            {
+                                <span class="option-percent">@percent%</span>
+                            }
+                        </div>
+                        @if (hasVoted)
+                        {
+                            <div class="progress-bar">
+                                <div class="progress-fill @(userVotedThis ? "fill-voted" : "")"
+                                     style="width: @(percent)%"></div>
+                            </div>
+                        }
+                    </button>
+                }
+            </div>
+
+            @if (dilemma.UserId == currentUserId)
+            {
+                <p class="info-msg">You cannot vote on your own dilemma.</p>
+            }
+            else if (IsExpired())
+            {
+                <p class="info-msg">This dilemma has expired.</p>
+            }
+        </div>
+
+        <!-- Comments -->
+        <div class="section">
+            <h2 class="section-title">Comments (@dilemma.Comments.Count)</h2>
+
+            @if (currentUserId != null && !IsExpired())
+            {
+                <div class="comment-form">
+                    <textarea @bind="newComment"
+                              placeholder="Share your thoughts..."
+                              class="comment-input"
+                              rows="3"></textarea>
+                    <button class="comment-submit-btn"
+                            @onclick="PostComment"
+                            disabled="@(isBusy || string.IsNullOrWhiteSpace(newComment))">
+                        Post Comment
+                    </button>
+                </div>
+            }
+
+            @if (!dilemma.Comments.Any())
+            {
+                <p class="empty-state">No comments yet. Be the first!</p>
+            }
+            else
+            {
+                @foreach (var comment in dilemma.Comments.OrderByDescending(c => c.CreatedAt))
+                {
+                    <div class="comment-card">
+                        <div class="comment-header">
+                            <div class="comment-avatar">@(comment.User?.UserName?[0].ToString().ToUpper() ?? "?")</div>
+                            <div>
+                                <span class="comment-username">@(comment.User?.UserName ?? "Unknown")</span>
+                                <span class="comment-date">@comment.CreatedAt.ToString("MMM d, yyyy · h:mm tt")</span>
+                            </div>
+                        </div>
+                        <p class="comment-body">@comment.Body</p>
+                    </div>
+                }
+            }
+        </div>
+
+    </div>
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private Dilemma? dilemma;
+    private string? currentUserId;
+    private HashSet<Guid> userVotedOptionIds = new();
+    private string newComment = "";
+    private bool isBusy = false;
+
+    private record CategoryOption(string Value, string Label, string Icon);
+    private List<CategoryOption> categories = new()
+    {
+        new("life",          "Life",          "🌱"),
+        new("career",        "Career",        "💼"),
+        new("finance",       "Finance",       "💰"),
+        new("relationships", "Relationships", "❤️"),
+        new("travel",        "Travel",        "✈️"),
+        new("health",        "Health",        "🏃"),
+        new("tech",          "Tech",          "💻"),
+        new("other",         "Other",         "🤔"),
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = await UserManager.GetUserAsync(authState.User);
+        currentUserId = user?.Id;
+
+        await LoadDilemma();
+
+        if (currentUserId != null)
+        {
+            var myVotes = await Db.Votes
+                .Where(v => v.UserId == currentUserId)
+                .Select(v => v.DilemmaOptionId)
+                .ToListAsync();
+            userVotedOptionIds = myVotes.ToHashSet();
+        }
+    }
+
+    private async Task LoadDilemma()
+    {
+        dilemma = await Db.Dilemmas
+            .Include(d => d.Options).ThenInclude(o => o.Votes)
+            .Include(d => d.Comments).ThenInclude(c => c.User)
+            .FirstOrDefaultAsync(d => d.Id == Id);
+
+        if (dilemma == null)
+            Nav.NavigateTo("/");
+    }
+
+    private async Task CastVote(DilemmaOption option)
+    {
+        if (currentUserId == null) { Nav.NavigateTo("/login"); return; }
+        if (HasVoted() || IsExpired()) return;
+
+        var vote = new Vote
+        {
+            Id = Guid.NewGuid(),
+            UserId = currentUserId,
+            DilemmaOptionId = option.Id,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        Db.Votes.Add(vote);
+        await Db.SaveChangesAsync();
+
+        userVotedOptionIds.Add(option.Id);
+        option.Votes.Add(vote);
+        StateHasChanged();
+    }
+
+    private async Task PostComment()
+    {
+        if (currentUserId == null || string.IsNullOrWhiteSpace(newComment)) return;
+        isBusy = true;
+
+        var comment = new Comment
+        {
+            Id = Guid.NewGuid(),
+            UserId = currentUserId,
+            DilemmaId = Id,
+            Body = newComment.Trim(),
+            CreatedAt = DateTime.UtcNow
+        };
+
+        Db.Comments.Add(comment);
+        await Db.SaveChangesAsync();
+
+        // reload to get user info attached
+        await LoadDilemma();
+        newComment = "";
+        isBusy = false;
+        StateHasChanged();
+    }
+
+    @* private async Task GoBack()
+    {
+        await JS.InvokeVoidAsync("history.back");
+    } *@
+
+    private bool HasVoted() =>
+        dilemma?.Options.Any(o => userVotedOptionIds.Contains(o.Id)) ?? false;
+
+    private bool IsExpired() =>
+        dilemma?.ExpiresAt.HasValue == true && dilemma.ExpiresAt!.Value < DateTime.UtcNow;
+
+    private string GetTimeLeft(DateTime? expiresAt)
+    {
+        if (!expiresAt.HasValue) return "No limit";
+        var diff = expiresAt.Value - DateTime.UtcNow;
+        if (diff <= TimeSpan.Zero) return "Expired";
+        if (diff.TotalHours < 1) return $"{(int)diff.TotalMinutes}m left";
+        if (diff.TotalHours < 24) return $"{(int)diff.TotalHours}h left";
+        return $"{(int)diff.TotalDays}d left";
+    }
+
+    private string GetCategoryIcon(string? category) =>
+        categories.FirstOrDefault(c => c.Value == category)?.Icon ?? "🤔";
+}
+
+<style>
+    .detail-page {
+        max-width: 680px;
+        margin: 2rem auto;
+        padding: 0 1rem;
+        font-family: Georgia, serif;
+    }
+
+    .back-btn {
+        background: none;
+        border: none;
+        color: #052767;
+        cursor: pointer;
+        font-size: 0.9rem;
+        padding: 0;
+        margin-bottom: 1.5rem;
+        display: block;
+    }
+
+    .back-btn:hover { text-decoration: underline; }
+
+    .detail-header { margin-bottom: 2rem; }
+
+    .detail-meta {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin-bottom: 0.75rem;
+    }
+
+    .category-tag {
+        background: #f0f4ff;
+        color: #052767;
+        font-size: 0.78rem;
+        padding: 2px 8px;
+        border-radius: 20px;
+        text-transform: capitalize;
+    }
+
+    .time-left { font-size: 0.78rem; color: #888; }
+
+    .detail-title {
+        font-size: 1.6rem;
+        margin: 0 0 0.5rem;
+        font-weight: 700;
+    }
+
+    .detail-desc { font-size: 0.95rem; color: #555; margin: 0; }
+
+    .section { margin-bottom: 2.5rem; }
+
+    .section-title {
+        font-size: 1.1rem;
+        font-weight: 700;
+        margin: 0 0 1rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 2px solid #f0f0f0;
+    }
+
+    /* Options */
+    .options-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        margin-bottom: 0.75rem;
+    }
+
+    .option-btn {
+        width: 100%;
+        text-align: left;
+        background: #f9f9f9;
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+        padding: 0.75rem 1rem;
+        cursor: pointer;
+        transition: all 0.15s;
+    }
+
+    .option-btn:hover:not(:disabled) { border-color: #052767; background: #f0f4ff; }
+    .option-btn.voted   { border-color: #052767; background: #f0f4ff; }
+    .option-btn.dimmed  { opacity: 0.6; }
+    .option-btn:disabled { cursor: default; }
+
+    .option-content {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .option-text    { font-size: 0.95rem; }
+    .option-percent { font-size: 0.85rem; font-weight: 600; color: #052767; }
+
+    .progress-bar {
+        height: 4px;
+        background: #e0e0e0;
+        border-radius: 2px;
+        margin-top: 0.5rem;
+    }
+
+    .progress-fill {
+        height: 100%;
+        background: #ccc;
+        border-radius: 2px;
+        transition: width 0.4s ease;
+    }
+
+    .fill-voted { background: #052767; }
+
+    .info-msg {
+        font-size: 0.82rem;
+        color: #aaa;
+        font-style: italic;
+        margin-top: 0.5rem;
+    }
+
+    /* Comment form */
+    .comment-form {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .comment-input {
+        width: 100%;
+        padding: 0.65rem 0.9rem;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        font-size: 0.92rem;
+        font-family: Georgia, serif;
+        resize: vertical;
+        box-sizing: border-box;
+        transition: border-color 0.2s;
+    }
+
+    .comment-input:focus {
+        outline: none;
+        border-color: #052767;
+    }
+
+    .comment-submit-btn {
+        align-self: flex-end;
+        padding: 0.5rem 1.25rem;
+        background: #052767;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 0.9rem;
+        transition: background 0.2s;
+    }
+
+    .comment-submit-btn:hover    { background: #3a0647; }
+    .comment-submit-btn:disabled { background: #aaa; cursor: not-allowed; }
+
+    /* Comments */
+    .comment-card {
+        border: 1px solid #f0f0f0;
+        border-radius: 8px;
+        padding: 1rem;
+        margin-bottom: 0.75rem;
+    }
+
+    .comment-header {
+        display: flex;
+        align-items: center;
+        gap: 0.65rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .comment-avatar {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #052767, #3a0647);
+        color: white;
+        font-size: 0.85rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        flex-shrink: 0;
+    }
+
+    .comment-username {
+        font-weight: 600;
+        font-size: 0.88rem;
+        display: block;
+    }
+
+    .comment-date {
+        font-size: 0.75rem;
+        color: #aaa;
+        display: block;
+    }
+
+    .comment-body {
+        font-size: 0.92rem;
+        color: #333;
+        margin: 0;
+        line-height: 1.5;
+    }
+
+    .empty-state {
+        text-align: center;
+        color: #aaa;
+        padding: 2rem 0;
+        font-style: italic;
+    }
+
+    .loading {
+        text-align: center;
+        color: #aaa;
+        padding: 3rem 0;
+    }
+</style>
