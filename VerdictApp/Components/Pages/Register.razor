@@ -8,52 +8,54 @@
 @inject AuthenticationStateProvider AuthStateProvider
 
 <PageTitle>Register</PageTitle>
-
 <h3>Register</h3>
+
 @if (isAuthed)
 {
-    <p>You’re already signed in.</p>
+    <p>You're already signed in.</p>
     <a href="/">Go home</a>
 }
 else
-{<EditForm Model="@model" OnValidSubmit="@HandleRegister" FormName = "RegisterForm">
-    <DataAnnotationsValidator />
-    <ValidationSummary />
-
-    <div style="margin-bottom:8px;">
-        <label>Email</label><br />
-        <InputText @bind-Value="model.Email" />
-    </div>
-
-    <div style="margin-bottom:8px; position:relative;">
-        <label>Password</label><br />
-
-        <InputText type="@PasswordInputType"
-                @bind-Value="model.Password"
-                class="form-control" />
-
-        <button type="button"
-                class="btn btn-light position-absolute end-0 top-50 translate-middle-y"
-                @onclick="TogglePassword">
-            <img src="@EyeIcon" width="20" />
-        </button>
-    </div>
-
-    <div style="margin-bottom:8px;">
-        <label>Confirm Password</label><br />
-        <InputText type="password" @bind-Value="model.ConfirmPassword" />
-    </div>
-
-    <button type="submit" disabled="@isBusy">Create account</button>
-</EditForm>
-@if (!string.IsNullOrWhiteSpace(error))
 {
-    <p style="color:red">@error</p>
+    <EditForm Model="@model" OnValidSubmit="@HandleRegister" FormName="RegisterForm">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+
+        <div style="margin-bottom:8px;">
+            <label>Email</label><br />
+            <InputText @bind-Value="model.Email" />
+        </div>
+
+        <div style="margin-bottom:8px;">
+            <label>Username</label><br />
+            <InputText @bind-Value="model.DisplayName" />
+        </div>
+
+        <div style="margin-bottom:8px; position:relative;">
+            <label>Password</label><br />
+            <InputText type="@PasswordInputType"
+                       @bind-Value="model.Password"
+                       class="form-control" />
+            <button type="button"
+                    class="btn btn-light position-absolute end-0 top-50 translate-middle-y"
+                    @onclick="TogglePassword">
+                <img src="@EyeIcon" width="20" />
+            </button>
+        </div>
+
+        <div style="margin-bottom:8px;">
+            <label>Confirm Password</label><br />
+            <InputText type="password" @bind-Value="model.ConfirmPassword" />
+        </div>
+
+        <button type="submit" disabled="@isBusy">Create account</button>
+    </EditForm>
+
+    @if (!string.IsNullOrWhiteSpace(error))
+    {
+        <p style="color:red">@error</p>
+    }
 }
-
-}
-
-
 
 <p>
     Already have an account?
@@ -62,8 +64,8 @@ else
 
 @code {
     [SupplyParameterFromForm(FormName = "RegisterForm")]
-    public RegisterModel model {get; set;} = new();
-    @* private RegisterModel model = new(); *@
+    public RegisterModel model { get; set; } = new();
+
     private string? error;
     private bool isBusy;
     private bool isAuthed;
@@ -76,25 +78,22 @@ else
     {
         error = null;
         isBusy = true;
-        Console.WriteLine($"Attempting to register");
 
         var user = new ApplicationUser
         {
             UserName = model.Email,
-            Email = model.Email
+            Email = model.Email,
+            DisplayName = model.DisplayName  // add this
         };
 
         var result = await UserManager.CreateAsync(user, model.Password);
-
         if (!result.Succeeded)
         {
-            Console.WriteLine("Failed to register user:");
             error = string.Join(" | ", result.Errors.Select(e => e.Description));
             isBusy = false;
             return;
         }
 
-        // auto-login after register (nice for testing)
         await SignInManager.SignInAsync(user, isPersistent: true);
         Nav.NavigateTo("/");
     }
@@ -103,6 +102,11 @@ else
     {
         [Required, EmailAddress]
         public string Email { get; set; } = "";
+
+        [Required]
+        [Display(Name = "Username")]
+        [MinLength(3, ErrorMessage = "Username must be at least 3 characters")]
+        public string DisplayName { get; set; } = "";
 
         [Required, MinLength(8)]
         public string Password { get; set; } = "";

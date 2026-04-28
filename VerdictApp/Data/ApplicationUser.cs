@@ -4,4 +4,5 @@ namespace VerdictApp.Data;
 
 public class ApplicationUser : IdentityUser
 {
+    public string? DisplayName {get;set;}
 }

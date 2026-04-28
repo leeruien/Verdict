@@ -156,7 +156,8 @@ using (var scope = app.Services.CreateScope())
         var user = new ApplicationUser
         {
             UserName = email,
-            Email = email
+            Email = email,
+            DisplayName = "TestUser"
         };
 
         await userManager.CreateAsync(user, "Password123!");

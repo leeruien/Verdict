@@ -19,10 +19,20 @@
         <InputText @bind-Value="model.Email" />
     </div>
 
-    <div style="margin-bottom:8px;">
-        <label>Password</label><br />
-        <InputText type="password" @bind-Value="model.Password" />
-    </div>
+    <div style="margin-bottom:8px; position:relative;">
+    <label>Password</label><br />
+    <InputText type="@passwordInputType" @bind-Value="model.Password" />
+    <button type="button" @onclick="TogglePassword" class="eye-btn">
+        @if (showPassword)
+        {
+            <span>🙈</span>
+        }
+        else
+        {
+            <span>👁</span>
+        }
+    </button>
+</div>
 
     <div style="margin-bottom:12px;">
         <InputCheckbox @bind-Value="model.RememberMe" />
@@ -48,6 +58,9 @@
     public LoginModel model { get; set;} = new();
     private string? error;
     private bool isBusy;
+    private bool showPassword = false;
+    private string passwordInputType => showPassword ? "text" : "password";
+    private void TogglePassword() => showPassword = !showPassword;
 
     private async Task HandleLogin()
     {

@@ -10,4 +10,7 @@ public class Comment {
     public DateTime CreatedAt { get; set; }
     public ApplicationUser User { get; set; }
     public Dilemma Dilemma { get; set; }
+    public Guid? ParentCommentId {get;set;}
+    public Comment ParentComment {get;set;}
+    public ICollection<Comment>Replies {get;set;} = new List<Comment>();
 }
