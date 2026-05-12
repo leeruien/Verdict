@@ -9,6 +9,7 @@ public class Dilemma {
     public string Category { get; set; }
     public DateTime? ExpiresAt { get; set; }
     public DateTime CreatedAt { get; set; }
+    public string? ImagePath { get; set; }
     public ApplicationUser User { get; set; }
     public List<DilemmaOption> Options { get; set; }
     public List<Comment> Comments { get; set; }

@@ -76,6 +76,10 @@ else
                     {
                         <p class="dilemma-desc">@dilemma.Description</p>
                     }
+                    @if (!string.IsNullOrEmpty(dilemma.ImagePath))
+                    {
+                        <img src="@dilemma.ImagePath" alt="Post image" class="card-image" />
+                    }
 
                     <div class="options-list">
                         @foreach (var option in dilemma.Options)
@@ -301,6 +305,14 @@ else
 
     .dilemma-title { font-size: 1.15rem; margin: 0 0 0.5rem; font-weight: 700; }
     .dilemma-desc  { font-size: 0.9rem; color: #555; margin: 0 0 0.75rem; }
+
+    .card-image {
+        width: 100%;
+        max-height: 220px;
+        object-fit: cover;
+        border-radius: 8px;
+        margin-bottom: 0.75rem;
+    }
 
     .options-list { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 0.75rem; }
 

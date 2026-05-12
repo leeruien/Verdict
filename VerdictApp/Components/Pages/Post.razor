@@ -10,6 +10,7 @@
 @inject ApplicationDbContext Db
 @inject NavigationManager Nav
 @inject VerdictApp.Services.NotificationService NotificationSvc
+@inject IWebHostEnvironment Env
 @attribute [Authorize]
 
 <div class="post-page">
@@ -96,6 +97,28 @@
             }
         </div>
 
+        <!-- Image -->
+        <div class="form-group">
+            <label>Image <span class="muted">(optional · max 5 MB)</span></label>
+            <div class="file-upload-area">
+                <InputFile accept="image/*" OnChange="HandleFileSelected" class="file-input" id="fileInput" />
+                <label for="fileInput" class="file-label">
+                    @if (selectedFile != null)
+                    {
+                        <span>📎 @selectedFile.Name (@((selectedFile.Size / 1024).ToString("N0")) KB)</span>
+                    }
+                    else
+                    {
+                        <span>📷 Choose an image…</span>
+                    }
+                </label>
+                @if (!string.IsNullOrEmpty(imageError))
+                {
+                    <p class="image-error">@imageError</p>
+                }
+            </div>
+        </div>
+
         <!-- Submit -->
         <button type="button"
                 class="submit-btn"
@@ -123,6 +146,44 @@
     private bool isBusy = false;
     private string successMessage = "";
     private string errorMessage = "";
+    private IBrowserFile? selectedFile;
+    private string imageError = "";
+
+    private static readonly string[] AllowedExtensions = { ".jpg", ".jpeg", ".png", ".gif", ".webp" };
+
+    private void HandleFileSelected(InputFileChangeEventArgs e)
+    {
+        imageError = "";
+        var file = e.File;
+        var ext = Path.GetExtension(file.Name).ToLowerInvariant();
+        if (!AllowedExtensions.Contains(ext))
+        {
+            imageError = "Only image files are allowed (jpg, png, gif, webp).";
+            selectedFile = null;
+            return;
+        }
+        if (file.Size > 5 * 1024 * 1024)
+        {
+            imageError = "Image must be under 5 MB.";
+            selectedFile = null;
+            return;
+        }
+        selectedFile = file;
+    }
+
+    private async Task<string?> SaveImageAsync(Guid dilemmaId)
+    {
+        if (selectedFile == null) return null;
+        var ext = Path.GetExtension(selectedFile.Name).ToLowerInvariant();
+        var uploadsDir = Path.Combine(Env.WebRootPath, "uploads");
+        Directory.CreateDirectory(uploadsDir);
+        var fileName = $"{dilemmaId}{ext}";
+        var filePath = Path.Combine(uploadsDir, fileName);
+        await using var stream = selectedFile.OpenReadStream(maxAllowedSize: 5 * 1024 * 1024);
+        await using var fileStream = File.Create(filePath);
+        await stream.CopyToAsync(fileStream);
+        return $"/uploads/{fileName}";
+    }
 
     private record CategoryOption(string Value, string Label, string Icon);
     private record TimeLimit(int Hours, string Label);
@@ -202,20 +263,14 @@
             }).ToList()
         };
 
+        dilemma.ImagePath = await SaveImageAsync(dilemma.Id);
         Db.Dilemmas.Add(dilemma);
         await Db.SaveChangesAsync();
 
         await NotificationSvc.NotifyNewPostAsync(dilemma, user.Id);
 
-        successMessage = "Your dilemma has been posted!";
-        title = "";
-        description = "";
-        selectedCategory = "";
-        selectedHours = 24;
-        options = new() { "", "" };
         isBusy = false;
-
-        await Task.Delay(1500);
+        @* Nav.NavigateTo("/dilemma/" + dilemma.Id); *@
         Nav.NavigateTo("/");
     }
 }
@@ -421,6 +476,34 @@
         border-radius: 8px;
         padding: 0.75rem 1rem;
     }
+
+    .file-upload-area {
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
+    }
+
+    .file-input {
+        display: none;
+    }
+
+    .file-label {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.6rem 1rem;
+        border: 1px dashed #ccc;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 0.9rem;
+        color: #555;
+        transition: all 0.15s;
+        width: fit-content;
+    }
+
+    .file-label:hover { border-color: #052767; color: #052767; background: #f0f4ff; }
+
+    .image-error { color: #e06c75; font-size: 0.83rem; margin: 0; }
 
     @@media (max-width: 480px) {
         .category-grid { grid-template-columns: repeat(2, 1fr); }
