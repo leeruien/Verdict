@@ -16,23 +16,18 @@
 
     <div style="margin-bottom:8px;">
         <label>Email</label><br />
-        <InputText @bind-Value="model.Email" />
+        <InputText @bind-Value="model.Email" style="width:300px;" />
     </div>
 
-    <div style="margin-bottom:8px; position:relative;">
-    <label>Password</label><br />
-    <InputText type="@passwordInputType" @bind-Value="model.Password" />
-    <button type="button" @onclick="TogglePassword" class="eye-btn">
-        @if (showPassword)
-        {
-            <span>🙈</span>
-        }
-        else
-        {
-            <span>👁</span>
-        }
-    </button>
-</div>
+    <div style="margin-bottom:8px;">
+        <label>Password</label><br />
+        <div style="position:relative; width:300px;">
+            <InputText type="@passwordInputType" @bind-Value="model.Password" style="width:300px; padding-right:40px;" />
+            <button type="button" @onclick="TogglePassword" style="position:absolute; right:8px; top:50%; transform:translateY(-50%); background:transparent; border:none;">
+                <img src="@(showPassword ? "icons/hide.png" : "icons/view.png")" width="20" />
+            </button>
+        </div>
+    </div>
 
     <div style="margin-bottom:12px;">
         <InputCheckbox @bind-Value="model.RememberMe" />
