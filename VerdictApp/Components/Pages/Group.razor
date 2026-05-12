@@ -72,6 +72,7 @@ else
                         @onclick='() => Nav.NavigateTo($"/dilemma/{dilemma.Id}")'>
                         @dilemma.Title
                     </h2>
+                    <span class="post-author">by @(dilemma.User?.DisplayName ?? dilemma.User?.UserName ?? "Unknown")</span>
 
                     @if (!string.IsNullOrWhiteSpace(dilemma.Description))
                     {
@@ -165,6 +166,7 @@ else
 
         dilemmas = await Db.Dilemmas
             .Where(d => d.Category == Category)
+            .Include(d => d.User)
             .Include(d => d.Options).ThenInclude(o => o.Votes)
             .Include(d => d.Comments)
             .OrderByDescending(d => d.CreatedAt)
@@ -217,6 +219,7 @@ else
 
         dilemmas = await Db.Dilemmas
             .Where(d => d.Category == Category)
+            .Include(d => d.User)
             .Include(d => d.Options).ThenInclude(o => o.Votes)
             .Include(d => d.Comments)
             .OrderByDescending(d => d.CreatedAt)
@@ -305,7 +308,8 @@ else
 
     .time-left { font-size: 0.78rem; color: #888; margin-left: auto; }
 
-    .dilemma-title { font-size: 1.15rem; margin: 0 0 0.5rem; font-weight: 700; }
+    .dilemma-title { font-size: 1.15rem; margin: 0 0 0.15rem; font-weight: 700; }
+    .post-author   { font-size: 0.78rem; color: #aaa; display: block; margin-bottom: 0.5rem; }
     .dilemma-desc  { font-size: 0.9rem; color: #555; margin: 0 0 0.75rem; }
 
     .card-image {

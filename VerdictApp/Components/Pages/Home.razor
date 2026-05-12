@@ -83,6 +83,7 @@
                     @onclick='() => Nav.NavigateTo($"/dilemma/{dilemma.Id}")'>
                     @dilemma.Title
                 </h2>
+                @* <span class="post-author">@(dilemma.User?.DisplayName ?? dilemma.User?.UserName ?? "Unknown")</span> *@
 
                 @if (!string.IsNullOrWhiteSpace(dilemma.Description))
                 {
@@ -196,6 +197,7 @@
     private async Task LoadDilemmas()
     {
         dilemmas = await Db.Dilemmas
+            .Include(d => d.User)
             .Include(d => d.Options).ThenInclude(o => o.Votes)
             .Include(d => d.Comments)
             .OrderByDescending(d => d.CreatedAt)
@@ -382,8 +384,15 @@
 
     .dilemma-title {
         font-size: 1.15rem;
-        margin: 0 0 0.5rem;
+        margin: 0 0 0.15rem;
         font-weight: 700;
+    }
+
+    .post-author {
+        font-size: 0.78rem;
+        color: #aaa;
+        display: block;
+        margin: -0.25rem 0 0.5rem;
     }
 
     .dilemma-desc {

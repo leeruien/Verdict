@@ -26,6 +26,7 @@ else
                     <span class="category-tag">@GetCategoryIcon(dilemma.Category) @dilemma.Category</span>
                 }
                 <span class="time-left">⏱ @GetTimeLeft(dilemma.ExpiresAt)</span>
+                <span class="user">@(dilemma.User?.DisplayName ?? dilemma.User?.UserName ?? "Unknown")</span>
             </div>
             <h1 class="detail-title">@dilemma.Title</h1>
             @if (!string.IsNullOrWhiteSpace(dilemma.Description))
