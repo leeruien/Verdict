@@ -56,22 +56,30 @@ main {
         height: 100vh;
         position: sticky;
         top: 0;
-        transition: width 0.3s ease;
-    }
-
-    .sidebar.collapsed {
-        width: 50px; 
+        transition: width 0.25s ease;
         overflow: hidden;
     }
 
-    /* Optional: Hide text labels when collapsed so only icons show */
-    .sidebar.collapsed ::deep .nav-link {
-        font-size: 0; 
-        justify-content: center;
+    .sidebar.collapsed {
+        width: 60px;
     }
-    
-    .sidebar.collapsed ::deep .bi {
-        margin-right: 0;
+
+    /* Hide brand text and nav labels when collapsed */
+    .sidebar.collapsed ::deep .navbar-brand {
+        opacity: 0;
+        width: 0;
+        pointer-events: none;
+    }
+
+    .sidebar.collapsed ::deep .nav-label {
+        opacity: 0;
+        width: 0;
+        pointer-events: none;
+    }
+
+    /* Rotate the toggle arrow when collapsed */
+    .sidebar.collapsed ::deep .sidebar-toggle {
+        transform: rotate(180deg);
     }
 
     .top-row {
