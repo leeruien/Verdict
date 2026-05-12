@@ -17,6 +17,8 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<Comment> Comments { get; set; }
     public DbSet<Notification> Notifications { get; set; }
     public DbSet<CategorySubscription> CategorySubscriptions { get; set; }
+    public DbSet<Conversation> Conversations { get; set; }
+    public DbSet<DirectMessage> DirectMessages { get; set; }
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -29,6 +31,8 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
         builder.Entity<Notification>().ToTable("Notifications");
         builder.Entity<CategorySubscription>().ToTable("CategorySubscriptions")
             .HasIndex(s => new { s.UserId, s.Category }).IsUnique();
+        builder.Entity<Conversation>().ToTable("Conversations");
+        builder.Entity<DirectMessage>().ToTable("DirectMessages");
 
         builder.Entity<Vote>()
             .HasIndex(v => new { v.UserId, v.DilemmaOptionId })

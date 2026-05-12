@@ -1,3 +1,12 @@
+@rendermode InteractiveServer
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.EntityFrameworkCore
+@using System.Security.Claims
+@using VerdictApp.Data
+@using VerdictApp.Models
+@inject AuthenticationStateProvider AuthStateProvider
+@inject IServiceScopeFactory ScopeFactory
+
 <div class="top-row ps-3 navbar navbar-dark">
     <div class="container-fluid">
         <a class="navbar-brand" href="">VerdictApp</a>
@@ -26,10 +35,18 @@
                     <NavLink class="nav-link" href="inbox">
                         <span class="nav-icon">📥</span>
                         <span class="nav-label">Inbox</span>
+                        @if (inboxCount > 0)
+                        {
+                            <span class="nav-count">@inboxCount</span>
+                        }
                     </NavLink>
                     <NavLink class="nav-link" href="notification">
                         <span class="nav-icon">🔔</span>
                         <span class="nav-label">Notifications</span>
+                        @if (notifCount > 0)
+                        {
+                            <span class="nav-count">@notifCount</span>
+                        }
                     </NavLink>
                     <NavLink class="nav-link" href="profile">
                         <span class="nav-icon">👤</span>
@@ -55,4 +72,23 @@
 </div>
 
 @code {
+    private int notifCount;
+    private int inboxCount;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        // Read the user ID directly from claims — avoids touching the shared scoped DbContext
+        var userId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (userId == null) return;
+
+        await using var scope = ScopeFactory.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+        notifCount = await db.Notifications
+            .CountAsync(n => n.RecipientUserId == userId && !n.IsRead);
+
+        inboxCount = await db.Conversations
+            .CountAsync(c => c.RecipientId == userId && c.Status == ConversationStatus.Pending);
+    }
 }

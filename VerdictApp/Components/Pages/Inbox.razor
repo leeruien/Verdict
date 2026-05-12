@@ -1,2 +1,403 @@
 @page "/inbox"
 @rendermode InteractiveServer
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.EntityFrameworkCore
+@using VerdictApp.Data
+@using VerdictApp.Models
+@inject UserManager<ApplicationUser> UserManager
+@inject AuthenticationStateProvider AuthStateProvider
+@inject ApplicationDbContext Db
+@inject NavigationManager Nav
+@attribute [Authorize]
+
+<PageTitle>Inbox</PageTitle>
+
+<div class="inbox-page">
+    <div class="inbox-header">
+        <h1>Inbox</h1>
+        <button class="new-msg-btn" @onclick="ToggleComposer">
+            @(showComposer ? "✕ Cancel" : "✉️ New Message")
+        </button>
+    </div>
+
+    @if (showComposer)
+    {
+        <div class="composer-box">
+            <input class="search-input" placeholder="Search users…"
+                   @bind="userSearch" @bind:event="oninput" />
+            @if (filteredUsers.Any())
+            {
+                <div class="user-list">
+                    @foreach (var u in filteredUsers)
+                    {
+                        <div class="user-row" @onclick="() => SelectUser(u)">
+                            <div class="mini-avatar">@(u.DisplayName?[0].ToString().ToUpper() ?? "?")</div>
+                            <span>@u.DisplayName</span>
+                        </div>
+                    }
+                </div>
+            }
+            @if (composingTo != null)
+            {
+                <div class="composing-to">
+                    To: <strong>@composingTo.DisplayName</strong>
+                </div>
+                <textarea class="msg-input" rows="3" placeholder="Write your message…"
+                          @bind="composeBody"></textarea>
+                <button class="send-btn" @onclick="SendRequest"
+                        disabled="@(string.IsNullOrWhiteSpace(composeBody))">Send Request</button>
+                @if (!string.IsNullOrEmpty(composeError))
+                {
+                    <p class="error-msg">@composeError</p>
+                }
+            }
+        </div>
+    }
+
+    @if (pendingIn.Any())
+    {
+        <section class="inbox-section">
+            <h2 class="section-title">Requests <span class="badge">@pendingIn.Count</span></h2>
+            @foreach (var c in pendingIn)
+            {
+                var preview = c.Messages.OrderBy(m => m.SentAt).FirstOrDefault();
+                <div class="convo-card request-card" @onclick='() => Nav.NavigateTo("/inbox/" + c.Id)'>
+                    <div class="mini-avatar">@(c.Initiator.DisplayName?[0].ToString().ToUpper() ?? "?")</div>
+                    <div class="convo-info">
+                        <span class="convo-name">@c.Initiator.DisplayName</span>
+                        <span class="convo-preview">@(preview?.Body ?? "")</span>
+                    </div>
+                    <span class="request-badge">Pending</span>
+                </div>
+            }
+        </section>
+    }
+
+    @if (accepted.Any())
+    {
+        <section class="inbox-section">
+            <h2 class="section-title">Messages</h2>
+            @foreach (var c in accepted)
+            {
+                var other = c.InitiatorId == currentUserId ? c.Recipient : c.Initiator;
+                var last  = c.Messages.OrderByDescending(m => m.SentAt).FirstOrDefault();
+                <div class="convo-card" @onclick='() => Nav.NavigateTo("/inbox/" + c.Id)'>
+                    <div class="mini-avatar">@(other.DisplayName?[0].ToString().ToUpper() ?? "?")</div>
+                    <div class="convo-info">
+                        <span class="convo-name">@other.DisplayName</span>
+                        <span class="convo-preview">@(last?.Body ?? "")</span>
+                    </div>
+                    <span class="convo-time">@FormatTime(last?.SentAt)</span>
+                </div>
+            }
+        </section>
+    }
+
+    @if (pendingOut.Any())
+    {
+        <section class="inbox-section">
+            <h2 class="section-title">Sent Requests</h2>
+            @foreach (var c in pendingOut)
+            {
+                var preview = c.Messages.OrderBy(m => m.SentAt).FirstOrDefault();
+                <div class="convo-card dimmed" @onclick='() => Nav.NavigateTo("/inbox/" + c.Id)'>
+                    <div class="mini-avatar">@(c.Recipient.DisplayName?[0].ToString().ToUpper() ?? "?")</div>
+                    <div class="convo-info">
+                        <span class="convo-name">@c.Recipient.DisplayName</span>
+                        <span class="convo-preview">@(preview?.Body ?? "")</span>
+                    </div>
+                    <span class="waiting-badge">Waiting</span>
+                </div>
+            }
+        </section>
+    }
+
+    @if (!pendingIn.Any() && !accepted.Any() && !pendingOut.Any())
+    {
+        <p class="empty-state">No messages yet. Send someone a message!</p>
+    }
+</div>
+
+@code {
+    private string? currentUserId;
+    private List<Conversation> pendingIn  = new();
+    private List<Conversation> pendingOut = new();
+    private List<Conversation> accepted   = new();
+    private List<ApplicationUser> allUsers = new();
+
+    private bool showComposer = false;
+    private string userSearch = "";
+    private ApplicationUser? composingTo;
+    private string composeBody = "";
+    private string composeError = "";
+
+    private List<ApplicationUser> filteredUsers =>
+        string.IsNullOrWhiteSpace(userSearch) ? new() :
+        allUsers.Where(u => u.Id != currentUserId &&
+            (u.DisplayName ?? "").Contains(userSearch, StringComparison.OrdinalIgnoreCase))
+        .Take(6).ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = await UserManager.GetUserAsync(authState.User);
+        currentUserId = user?.Id;
+        if (currentUserId == null) { Nav.NavigateTo("/login"); return; }
+
+        allUsers = await Db.Users.ToListAsync();
+        await LoadConversations();
+    }
+
+    private async Task LoadConversations()
+    {
+        var convos = await Db.Conversations
+            .Include(c => c.Initiator)
+            .Include(c => c.Recipient)
+            .Include(c => c.Messages)
+            .Where(c => c.InitiatorId == currentUserId || c.RecipientId == currentUserId)
+            .OrderByDescending(c => c.CreatedAt)
+            .ToListAsync();
+
+        pendingIn  = convos.Where(c => c.Status == ConversationStatus.Pending && c.RecipientId == currentUserId).ToList();
+        pendingOut = convos.Where(c => c.Status == ConversationStatus.Pending && c.InitiatorId == currentUserId).ToList();
+        accepted   = convos.Where(c => c.Status == ConversationStatus.Accepted).ToList();
+    }
+
+    private void ToggleComposer()
+    {
+        showComposer = !showComposer;
+        userSearch = "";
+        composingTo = null;
+        composeBody = "";
+        composeError = "";
+    }
+
+    private void SelectUser(ApplicationUser u)
+    {
+        composingTo = u;
+        userSearch = u.DisplayName ?? "";
+    }
+
+    private async Task SendRequest()
+    {
+        if (composingTo == null || string.IsNullOrWhiteSpace(composeBody)) return;
+        composeError = "";
+
+        var existing = await Db.Conversations.FirstOrDefaultAsync(c =>
+            (c.InitiatorId == currentUserId && c.RecipientId == composingTo.Id) ||
+            (c.InitiatorId == composingTo.Id && c.RecipientId == currentUserId));
+
+        if (existing != null)
+        {
+            Nav.NavigateTo($"/inbox/{existing.Id}");
+            return;
+        }
+
+        var convo = new Conversation
+        {
+            Id = Guid.NewGuid(),
+            InitiatorId = currentUserId!,
+            RecipientId = composingTo.Id,
+            Status = ConversationStatus.Pending,
+            CreatedAt = DateTime.UtcNow
+        };
+        Db.Conversations.Add(convo);
+
+        Db.DirectMessages.Add(new DirectMessage
+        {
+            Id = Guid.NewGuid(),
+            ConversationId = convo.Id,
+            SenderId = currentUserId!,
+            Body = composeBody.Trim(),
+            SentAt = DateTime.UtcNow
+        });
+
+        await Db.SaveChangesAsync();
+        Nav.NavigateTo($"/inbox/{convo.Id}");
+    }
+
+    private string FormatTime(DateTime? dt)
+    {
+        if (dt == null) return "";
+        var diff = DateTime.UtcNow - dt.Value;
+        if (diff.TotalMinutes < 1)  return "now";
+        if (diff.TotalHours < 1)    return $"{(int)diff.TotalMinutes}m";
+        if (diff.TotalDays < 1)     return $"{(int)diff.TotalHours}h";
+        if (diff.TotalDays < 7)     return $"{(int)diff.TotalDays}d";
+        return dt.Value.ToString("MMM d");
+    }
+}
+
+<style>
+    .inbox-page {
+        max-width: 640px;
+        margin: 2rem auto;
+        padding: 0 1rem;
+        font-family: Georgia, serif;
+    }
+
+    .inbox-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 1.5rem;
+    }
+
+    .inbox-header h1 { margin: 0; font-size: 1.8rem; }
+
+    .new-msg-btn {
+        padding: 0.45rem 1rem;
+        background: #052767;
+        color: white;
+        border: none;
+        border-radius: 20px;
+        font-size: 0.85rem;
+        cursor: pointer;
+        transition: background 0.15s;
+    }
+
+    .new-msg-btn:hover { background: #3a0647; }
+
+    .composer-box {
+        background: #f8f8f8;
+        border: 1px solid #e0e0e0;
+        border-radius: 10px;
+        padding: 1rem;
+        margin-bottom: 1.5rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+
+    .search-input {
+        padding: 0.55rem 0.85rem;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        font-size: 0.9rem;
+        font-family: Georgia, serif;
+    }
+
+    .search-input:focus { outline: none; border-color: #052767; }
+
+    .user-list {
+        border: 1px solid #e8e8e8;
+        border-radius: 8px;
+        overflow: hidden;
+    }
+
+    .user-row {
+        display: flex;
+        align-items: center;
+        gap: 0.65rem;
+        padding: 0.6rem 0.85rem;
+        cursor: pointer;
+        font-size: 0.9rem;
+        transition: background 0.1s;
+    }
+
+    .user-row:hover { background: #f0f4ff; }
+
+    .composing-to {
+        font-size: 0.88rem;
+        color: #555;
+        padding: 0.25rem 0;
+    }
+
+    .msg-input {
+        padding: 0.65rem 0.85rem;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        font-size: 0.9rem;
+        font-family: Georgia, serif;
+        resize: vertical;
+    }
+
+    .msg-input:focus { outline: none; border-color: #052767; }
+
+    .send-btn {
+        align-self: flex-end;
+        padding: 0.5rem 1.2rem;
+        background: #052767;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-size: 0.88rem;
+        cursor: pointer;
+    }
+
+    .send-btn:disabled { background: #aaa; cursor: not-allowed; }
+    .send-btn:hover:not(:disabled) { background: #3a0647; }
+
+    .error-msg { color: #c0392b; font-size: 0.83rem; margin: 0; }
+
+    .inbox-section { margin-bottom: 2rem; }
+
+    .section-title {
+        font-size: 0.82rem;
+        font-weight: 700;
+        color: #888;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin: 0 0 0.75rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .badge {
+        background: #052767;
+        color: white;
+        border-radius: 999px;
+        padding: 1px 7px;
+        font-size: 0.72rem;
+    }
+
+    .convo-card {
+        display: flex;
+        align-items: center;
+        gap: 0.85rem;
+        padding: 0.85rem 1rem;
+        border: 1px solid #ebebeb;
+        border-radius: 10px;
+        margin-bottom: 0.5rem;
+        cursor: pointer;
+        transition: background 0.15s;
+    }
+
+    .convo-card:hover  { background: #f5f5f5; }
+    .convo-card.dimmed { opacity: 0.7; }
+    .request-card      { border-color: #d8e4ff; background: #f0f4ff; }
+    .request-card:hover { background: #e8eeff; }
+
+    .mini-avatar {
+        width: 38px;
+        height: 38px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #052767, #3a0647);
+        color: white;
+        font-size: 0.9rem;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+    .convo-info {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 0.15rem;
+        overflow: hidden;
+    }
+
+    .convo-name    { font-weight: 600; font-size: 0.92rem; }
+    .convo-preview { font-size: 0.82rem; color: #888; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .convo-time    { font-size: 0.76rem; color: #bbb; flex-shrink: 0; }
+
+    .request-badge { font-size: 0.72rem; background: #052767; color: white; border-radius: 20px; padding: 2px 8px; flex-shrink: 0; }
+    .waiting-badge { font-size: 0.72rem; background: #888; color: white; border-radius: 20px; padding: 2px 8px; flex-shrink: 0; }
+
+    .empty-state { text-align: center; color: #aaa; padding: 3rem 0; font-style: italic; }
+</style>
