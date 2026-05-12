@@ -27,6 +27,7 @@ else
             <div class="group-icon">@cat.Icon</div>
             <div class="group-info">
                 <h1>@cat.Label</h1>
+                <h3 class="group-subtitle">A place to discuss @cat.Label-related dilemmas</h3>
                 <div class="group-stats">
                     <span>@subscriberCount subscribers</span>
                     <span>@(dilemmas?.Count ?? 0) posts</span>
@@ -36,7 +37,7 @@ else
             {
                 <button class="subscribe-btn @(isSubscribed ? "subscribed" : "")"
                         @onclick="ToggleSubscribe">
-                    @(isSubscribed ? "✓ Subscribed" : "+ Subscribe")
+                    @(isSubscribed ? "x Unsubscribe" : "+ Subscribe")
                 </button>
             }
         </div>
@@ -269,6 +270,7 @@ else
     .group-info h1 { margin: 0 0 0.25rem; font-size: 1.5rem; }
 
     .group-stats { font-size: 0.82rem; color: #666; display: flex; gap: 1rem; }
+    .group-subtitle {font-size: 0.95rem}
 
     .subscribe-btn {
         padding: 0.5rem 1.1rem;

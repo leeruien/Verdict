@@ -46,17 +46,13 @@
         <!-- Category -->
         <div class="form-group">
             <label>Category <span class="required">*</span></label>
-            <div class="category-grid">
+            <select class="form-control" @bind="selectedCategory">
+                <option value="">-- Select a category --</option>
                 @foreach (var cat in categories)
                 {
-                    <button type="button"
-                            class="category-btn @(selectedCategory == cat.Value ? "selected" : "")"
-                            @onclick="() => selectedCategory = cat.Value">
-                        <span class="cat-icon">@cat.Icon</span>
-                        <span>@cat.Label</span>
-                    </button>
+                    <option value="@cat.Value">@cat.Icon @cat.Label</option>
                 }
-            </div>
+            </select>
         </div>
 
         <!-- Time limit -->
