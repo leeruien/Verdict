@@ -1,4 +1,4 @@
-﻿@inherits LayoutComponentBase
+@inherits LayoutComponentBase
 
 <div class="page">
     <div class="sidebar">
@@ -7,6 +7,10 @@
 
     <main>
         <div class="top-row px-4">
+            <form action="/search" method="get" class="search-form">
+                <input type="search" name="q" placeholder="Search posts, groups…" class="search-input" autocomplete="off" />
+                <button type="submit" class="search-btn">🔍</button>
+            </form>
             <a href="/About">About</a>
             <AuthorizeView>
                 <Authorized>
@@ -22,9 +26,50 @@
     </main>
 </div>
 
+<style>
+    .top-row {
+        position: relative;
+    }
+
+    .search-form {
+        display: flex;
+        align-items: center;
+        gap: 0.3rem;
+        width: 360px;
+        position: absolute;
+        left: 50%;
+        transform: translateX(-50%);
+    }
+
+    .search-input {
+        flex: 1;
+        padding: 0.35rem 0.75rem;
+        border: 1px solid #ddd;
+        border-radius: 20px;
+        font-size: 0.85rem;
+        font-family: Georgia, serif;
+        outline: none;
+        transition: border-color 0.2s;
+    }
+
+    .search-input:focus { border-color: #052767; }
+
+    .search-btn {
+        background: none;
+        border: none;
+        cursor: pointer;
+        font-size: 1rem;
+        padding: 0.2rem 0.4rem;
+        line-height: 1;
+        opacity: 0.6;
+        transition: opacity 0.15s;
+    }
+
+    .search-btn:hover { opacity: 1; }
+</style>
+
 <div id="blazor-error-ui" data-nosnippet>
     An unhandled error has occurred.
     <a href="." class="reload">Reload</a>
     <span class="dismiss">🗙</span>
 </div>
-

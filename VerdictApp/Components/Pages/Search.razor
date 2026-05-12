@@ -1,0 +1,262 @@
+@page "/search"
+@rendermode InteractiveServer
+@using Microsoft.EntityFrameworkCore
+@using VerdictApp.Data
+@using VerdictApp.Models
+@inject ApplicationDbContext Db
+@inject NavigationManager Nav
+
+<div class="search-page">
+
+    <div class="search-header">
+        <h1>Search</h1>
+        @if (!string.IsNullOrWhiteSpace(Q))
+        {
+            <p class="search-query">Results for "<strong>@Q</strong>"</p>
+        }
+    </div>
+
+    @if (isLoading)
+    {
+        <p class="loading">Searching…</p>
+    }
+    else if (!string.IsNullOrWhiteSpace(Q))
+    {
+        <!-- Groups -->
+        @if (matchedGroups.Any())
+        {
+            <section class="result-section">
+                <h2 class="section-title">Groups</h2>
+                <div class="group-results">
+                    @foreach (var g in matchedGroups)
+                    {
+                        <div class="group-result-card" @onclick='() => Nav.NavigateTo("/group/" + g.Value)'>
+                            <span class="gr-icon">@g.Icon</span>
+                            <div class="gr-info">
+                                <span class="gr-name">@g.Label</span>
+                                <span class="gr-count">@(groupPostCounts.GetValueOrDefault(g.Value, 0)) posts</span>
+                            </div>
+                            <span class="gr-arrow">→</span>
+                        </div>
+                    }
+                </div>
+            </section>
+        }
+
+        <!-- Posts -->
+        @if (posts.Any())
+        {
+            <section class="result-section">
+                <h2 class="section-title">Posts</h2>
+                @foreach (var d in posts)
+                {
+                    var totalVotes = d.Options.Sum(o => o.Votes.Count);
+                    var catIcon = GetCategoryIcon(d.Category);
+                    <div class="post-result-card" @onclick='() => Nav.NavigateTo("/dilemma/" + d.Id)'>
+                        <div class="pr-meta">
+                            @if (!string.IsNullOrEmpty(d.Category))
+                            {
+                                <span class="pr-cat">@catIcon @d.Category</span>
+                            }
+                            <span class="pr-time">@GetTimeLeft(d.ExpiresAt)</span>
+                        </div>
+                        <h3 class="pr-title">@d.Title</h3>
+                        @if (!string.IsNullOrWhiteSpace(d.Description))
+                        {
+                            <p class="pr-desc">@d.Description</p>
+                        }
+                        <div class="pr-footer">
+                            <span>@totalVotes votes</span>
+                            <span>@d.Comments.Count comments</span>
+                        </div>
+                    </div>
+                }
+            </section>
+        }
+
+        @if (!matchedGroups.Any() && !posts.Any())
+        {
+            <p class="no-results">No results found for "<strong>@Q</strong>".</p>
+        }
+    }
+    else
+    {
+        <p class="hint">Type something above to search posts and groups.</p>
+    }
+
+</div>
+
+@code {
+    [SupplyParameterFromQuery] public string? Q { get; set; }
+
+    private bool isLoading = true;
+    private List<Dilemma> posts = new();
+    private List<CategoryOption> matchedGroups = new();
+    private Dictionary<string, int> groupPostCounts = new();
+
+    private record CategoryOption(string Value, string Label, string Icon);
+
+    private List<CategoryOption> allCategories = new()
+    {
+        new("life",          "Life",          "🌱"),
+        new("career",        "Career",        "💼"),
+        new("finance",       "Finance",       "💰"),
+        new("relationships", "Relationships", "❤️"),
+        new("travel",        "Travel",        "✈️"),
+        new("health",        "Health",        "🏃"),
+        new("tech",          "Tech",          "💻"),
+        new("other",         "Other",         "🤔"),
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        await RunSearch();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await RunSearch();
+    }
+
+    private async Task RunSearch()
+    {
+        isLoading = true;
+        StateHasChanged();
+
+        if (string.IsNullOrWhiteSpace(Q))
+        {
+            posts = new();
+            matchedGroups = new();
+            isLoading = false;
+            return;
+        }
+
+        var q = Q.Trim();
+        var likeQ = $"%{q}%";
+
+        matchedGroups = allCategories
+            .Where(c => c.Label.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                        c.Value.Contains(q, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        posts = await Db.Dilemmas
+            .Where(d => EF.Functions.ILike(d.Title, likeQ) ||
+                        (d.Description != null && EF.Functions.ILike(d.Description, likeQ)))
+            .Include(d => d.Options).ThenInclude(o => o.Votes)
+            .Include(d => d.Comments)
+            .OrderByDescending(d => d.CreatedAt)
+            .Take(30)
+            .ToListAsync();
+
+        if (matchedGroups.Any())
+        {
+            var groupKeys = matchedGroups.Select(g => g.Value).ToList();
+            groupPostCounts = await Db.Dilemmas
+                .Where(d => groupKeys.Contains(d.Category))
+                .GroupBy(d => d.Category)
+                .Select(g => new { Cat = g.Key, Count = g.Count() })
+                .ToDictionaryAsync(x => x.Cat, x => x.Count);
+        }
+
+        isLoading = false;
+    }
+
+    private string GetCategoryIcon(string? category) =>
+        allCategories.FirstOrDefault(c => c.Value == category)?.Icon ?? "🤔";
+
+    private string GetTimeLeft(DateTime? expiresAt)
+    {
+        if (!expiresAt.HasValue) return "No limit";
+        var diff = expiresAt.Value - DateTime.UtcNow;
+        if (diff <= TimeSpan.Zero) return "Expired";
+        if (diff.TotalHours < 1) return $"{(int)diff.TotalMinutes}m left";
+        if (diff.TotalHours < 24) return $"{(int)diff.TotalHours}h left";
+        return $"{(int)diff.TotalDays}d left";
+    }
+}
+
+<style>
+    .search-page {
+        max-width: 680px;
+        margin: 2rem auto;
+        padding: 0 1rem;
+        font-family: Georgia, serif;
+    }
+
+    .search-header { margin-bottom: 1.5rem; }
+    .search-header h1 { margin: 0 0 0.25rem; font-size: 2rem; }
+    .search-query { color: #555; margin: 0; font-size: 0.95rem; }
+
+    .result-section { margin-bottom: 2rem; }
+
+    .section-title {
+        font-size: 0.82rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: #888;
+        margin: 0 0 0.75rem;
+        border-bottom: 1px solid #eee;
+        padding-bottom: 0.4rem;
+    }
+
+    /* Group results */
+    .group-results { display: flex; flex-direction: column; gap: 0.5rem; }
+
+    .group-result-card {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.75rem 1rem;
+        border: 1px solid #e8e8e8;
+        border-radius: 10px;
+        cursor: pointer;
+        transition: all 0.15s;
+        background: white;
+    }
+
+    .group-result-card:hover { border-color: #052767; background: #f0f4ff; }
+
+    .gr-icon { font-size: 1.5rem; line-height: 1; }
+    .gr-info { flex: 1; display: flex; flex-direction: column; }
+    .gr-name { font-weight: 600; font-size: 0.95rem; }
+    .gr-count { font-size: 0.78rem; color: #aaa; }
+    .gr-arrow { color: #aaa; font-size: 1rem; }
+
+    /* Post results */
+    .post-result-card {
+        border: 1px solid #e8e8e8;
+        border-radius: 12px;
+        padding: 1rem 1.25rem;
+        margin-bottom: 0.75rem;
+        cursor: pointer;
+        transition: box-shadow 0.2s;
+    }
+
+    .post-result-card:hover { box-shadow: 0 2px 16px rgba(0,0,0,0.08); border-color: #ccc; }
+
+    .pr-meta { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.4rem; }
+
+    .pr-cat {
+        background: #f0f4ff;
+        color: #052767;
+        font-size: 0.75rem;
+        padding: 2px 8px;
+        border-radius: 20px;
+        text-transform: capitalize;
+    }
+
+    .pr-time { font-size: 0.75rem; color: #aaa; margin-left: auto; }
+
+    .pr-title { margin: 0 0 0.35rem; font-size: 1.05rem; font-weight: 700; }
+    .pr-desc  { margin: 0 0 0.5rem; font-size: 0.88rem; color: #666; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    .pr-footer { display: flex; gap: 1rem; font-size: 0.78rem; color: #aaa; }
+
+    .loading, .hint, .no-results {
+        text-align: center;
+        color: #aaa;
+        padding: 3rem 0;
+        font-style: italic;
+    }
+</style>
