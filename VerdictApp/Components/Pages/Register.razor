@@ -1,4 +1,5 @@
 @page "/register"
+@rendermode InteractiveServer
 @using System.ComponentModel.DataAnnotations
 @using Microsoft.AspNetCore.Identity
 @using VerdictApp.Data
@@ -23,29 +24,32 @@ else
 
         <div style="margin-bottom:8px;">
             <label>Email</label><br />
-            <InputText @bind-Value="model.Email" />
+            <InputText @bind-Value="model.Email" style="width:300px;" />
         </div>
 
         <div style="margin-bottom:8px;">
             <label>Username</label><br />
-            <InputText @bind-Value="model.DisplayName" />
+            <InputText @bind-Value="model.DisplayName" style="width:300px;" />
         </div>
 
-        <div style="margin-bottom:8px; position:relative;">
+        <div style="margin-bottom:8px;">
             <label>Password</label><br />
-            <InputText type="@PasswordInputType"
-                       @bind-Value="model.Password"
-                       class="form-control" />
-            <button type="button"
-                    class="btn btn-light position-absolute end-0 top-50 translate-middle-y"
-                    @onclick="TogglePassword">
-                <img src="@EyeIcon" width="20" />
-            </button>
+            <div style="position:relative; width:300px;">
+                <InputText type="@PasswordInputType"
+                           @bind-Value="model.Password"
+                           class="form-control"
+                           style="padding-right:40px;" />
+                <button type="button"
+                        style="position:absolute; right:8px; top:50%; transform:translateY(-50%); background:transparent; border:none;"
+                        @onclick="TogglePassword">
+                    <img src="@EyeIcon" width="20" />
+                </button>
+            </div>
         </div>
 
         <div style="margin-bottom:8px;">
             <label>Confirm Password</label><br />
-            <InputText type="password" @bind-Value="model.ConfirmPassword" />
+            <InputText type="password" @bind-Value="model.ConfirmPassword" style="width:300px;" />
         </div>
 
         <button type="submit" disabled="@isBusy">Create account</button>
@@ -63,7 +67,6 @@ else
 </p>
 
 @code {
-    [SupplyParameterFromForm(FormName = "RegisterForm")]
     public RegisterModel model { get; set; } = new();
 
     private string? error;
@@ -71,7 +74,7 @@ else
     private bool isAuthed;
     bool showPassword = false;
     string PasswordInputType => showPassword ? "text" : "password";
-    string EyeIcon => showPassword ? "icons/hide.png" : "wwwroot/icons/view.png";
+    string EyeIcon => showPassword ? "icons/hide.png" : "icons/view.png";
     void TogglePassword() => showPassword = !showPassword;
 
     private async Task HandleRegister()
