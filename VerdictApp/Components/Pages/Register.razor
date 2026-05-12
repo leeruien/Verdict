@@ -24,12 +24,12 @@ else
 
         <div style="margin-bottom:8px;">
             <label>Email</label><br />
-            <InputText @bind-Value="model.Email" style="width:300px;" />
+            <InputText @bind-Value="model.Email" class="form-control" style="width:300px;" />
         </div>
 
         <div style="margin-bottom:8px;">
             <label>Username</label><br />
-            <InputText @bind-Value="model.DisplayName" style="width:300px;" />
+            <InputText @bind-Value="model.DisplayName" class="form-control" style="width:300px;" />
         </div>
 
         <div style="margin-bottom:8px;">
@@ -49,7 +49,7 @@ else
 
         <div style="margin-bottom:8px;">
             <label>Confirm Password</label><br />
-            <InputText type="password" @bind-Value="model.ConfirmPassword" style="width:300px;" />
+            <InputText type="password" @bind-Value="model.ConfirmPassword" class="form-control" style="width:300px;" />
         </div>
 
         <button type="submit" disabled="@isBusy">Create account</button>
