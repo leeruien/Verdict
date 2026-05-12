@@ -1,0 +1,174 @@
+@page "/notification"
+@rendermode InteractiveServer
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.EntityFrameworkCore
+@using VerdictApp.Data
+@using VerdictApp.Models
+@inject UserManager<ApplicationUser> UserManager
+@inject AuthenticationStateProvider AuthStateProvider
+@inject ApplicationDbContext Db
+@inject NavigationManager Nav
+@attribute [Authorize]
+
+<PageTitle>Notifications</PageTitle>
+
+<div class="notif-page">
+    <div class="notif-header">
+        <h1>Notifications</h1>
+        @if (notifications.Any(n => !n.IsRead))
+        {
+            <button class="mark-all-btn" @onclick="MarkAllRead">Mark all as read</button>
+        }
+    </div>
+
+    @if (notifications.Count == 0)
+    {
+        <p class="empty-state">No notifications yet.</p>
+    }
+    else
+    {
+        @foreach (var n in notifications)
+        {
+            <div class="notif-card @(n.IsRead ? "read" : "unread")"
+                 @onclick="() => OpenNotification(n)">
+                <span class="notif-icon">@GetIcon(n.Type)</span>
+                <div class="notif-body">
+                    <p class="notif-message">@n.Message</p>
+                    <span class="notif-time">@FormatTime(n.CreatedAt)</span>
+                </div>
+                @if (!n.IsRead)
+                {
+                    <span class="unread-dot"></span>
+                }
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private List<VerdictApp.Models.Notification> notifications = new();
+    private string? currentUserId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = await UserManager.GetUserAsync(authState.User);
+        currentUserId = user?.Id;
+        if (currentUserId == null) { Nav.NavigateTo("/login"); return; }
+
+        notifications = await Db.Notifications
+            .Where(n => n.RecipientUserId == currentUserId)
+            .OrderByDescending(n => n.CreatedAt)
+            .ToListAsync();
+    }
+
+    private async Task OpenNotification(VerdictApp.Models.Notification n)
+    {
+        if (!n.IsRead)
+        {
+            n.IsRead = true;
+            await Db.SaveChangesAsync();
+        }
+        if (n.DilemmaId.HasValue)
+            Nav.NavigateTo($"/dilemma/{n.DilemmaId}");
+    }
+
+    private async Task MarkAllRead()
+    {
+        foreach (var n in notifications.Where(n => !n.IsRead))
+            n.IsRead = true;
+        await Db.SaveChangesAsync();
+        StateHasChanged();
+    }
+
+    private string GetIcon(VerdictApp.Models.NotificationType type) => type switch
+    {
+        NotificationType.Vote        => "🗳️",
+        NotificationType.Comment     => "💬",
+        NotificationType.ExpiringSoon => "⏰",
+        NotificationType.NewPost     => "✨",
+        _                            => "🔔"
+    };
+
+    private string FormatTime(DateTime dt)
+    {
+        var diff = DateTime.UtcNow - dt;
+        if (diff.TotalMinutes < 1)  return "Just now";
+        if (diff.TotalHours < 1)    return $"{(int)diff.TotalMinutes}m ago";
+        if (diff.TotalDays < 1)     return $"{(int)diff.TotalHours}h ago";
+        if (diff.TotalDays < 7)     return $"{(int)diff.TotalDays}d ago";
+        return dt.ToString("MMM d, yyyy");
+    }
+}
+
+<style>
+    .notif-page {
+        max-width: 640px;
+        margin: 2rem auto;
+        padding: 0 1rem;
+        font-family: Georgia, serif;
+    }
+
+    .notif-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 1.5rem;
+    }
+
+    .notif-header h1 { margin: 0; font-size: 1.8rem; }
+
+    .mark-all-btn {
+        background: none;
+        border: 1px solid #ccc;
+        border-radius: 20px;
+        padding: 0.35rem 0.9rem;
+        font-size: 0.82rem;
+        cursor: pointer;
+        color: #555;
+        transition: all 0.15s;
+    }
+
+    .mark-all-btn:hover { border-color: #052767; color: #052767; }
+
+    .notif-card {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.85rem;
+        padding: 0.9rem 1rem;
+        border-radius: 10px;
+        margin-bottom: 0.5rem;
+        cursor: pointer;
+        transition: background 0.15s;
+        position: relative;
+    }
+
+    .notif-card.unread { background: #f0f4ff; border: 1px solid #d8e4ff; }
+    .notif-card.read   { background: #fafafa; border: 1px solid #f0f0f0; }
+    .notif-card:hover  { background: #e8eeff; }
+
+    .notif-icon { font-size: 1.3rem; flex-shrink: 0; margin-top: 2px; }
+
+    .notif-body { flex: 1; }
+
+    .notif-message { margin: 0 0 0.25rem; font-size: 0.92rem; color: #222; }
+
+    .notif-time { font-size: 0.76rem; color: #aaa; }
+
+    .unread-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #052767;
+        flex-shrink: 0;
+        margin-top: 6px;
+    }
+
+    .empty-state {
+        text-align: center;
+        color: #aaa;
+        padding: 3rem 0;
+        font-style: italic;
+    }
+</style>

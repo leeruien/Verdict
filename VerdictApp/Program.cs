@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.EntityFrameworkCore;
 using VerdictApp.Data;
 using Microsoft.AspNetCore.Mvc;
+using VerdictApp.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -34,6 +35,8 @@ builder.Services.AddAuthentication(IdentityConstants.ApplicationScheme)
 
 builder.Services.AddAuthorization();
 builder.Services.AddCascadingAuthenticationState();
+builder.Services.AddScoped<NotificationService>();
+builder.Services.AddHostedService<ExpiryNotificationService>();
 builder.Services.AddAntiforgery();
 builder.Services.AddRazorPages();
 

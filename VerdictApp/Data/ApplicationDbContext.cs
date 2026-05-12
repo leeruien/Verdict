@@ -15,6 +15,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<DilemmaOption> DilemmaOptions { get; set; }
     public DbSet<Vote> Votes { get; set; }
     public DbSet<Comment> Comments { get; set; }
+    public DbSet<Notification> Notifications { get; set; }
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -24,6 +25,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
         builder.Entity<DilemmaOption>().ToTable("DilemmaOptions");
         builder.Entity<Vote>().ToTable("Votes");
         builder.Entity<Comment>().ToTable("Comments");
+        builder.Entity<Notification>().ToTable("Notifications");
 
         builder.Entity<Vote>()
             .HasIndex(v => new { v.UserId, v.DilemmaOptionId })

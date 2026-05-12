@@ -9,6 +9,7 @@
 @inject AuthenticationStateProvider AuthStateProvider
 @inject ApplicationDbContext Db
 @inject NavigationManager Nav
+@inject VerdictApp.Services.NotificationService NotificationSvc
 
 @if (dilemma == null)
 {
@@ -238,6 +239,10 @@ else
         Db.Votes.Add(vote);
         await Db.SaveChangesAsync();
 
+        var voter = await UserManager.FindByIdAsync(currentUserId);
+        if (voter != null && dilemma.UserId != currentUserId)
+            await NotificationSvc.NotifyVoteAsync(voter.DisplayName ?? voter.Email ?? "Someone", dilemma);
+
         userVotedOptionIds.Add(option.Id);
         option.Votes.Add(vote);
         StateHasChanged();
@@ -260,6 +265,10 @@ else
 
         Db.Comments.Add(comment);
         await Db.SaveChangesAsync();
+
+        var commenter = await UserManager.FindByIdAsync(currentUserId);
+        if (commenter != null && dilemma != null)
+            await NotificationSvc.NotifyCommentAsync(commenter.DisplayName ?? commenter.Email ?? "Someone", dilemma, currentUserId);
 
         await LoadDilemma();
         newComment = "";

@@ -9,6 +9,7 @@
 @inject AuthenticationStateProvider AuthStateProvider
 @inject ApplicationDbContext Db
 @inject NavigationManager Nav
+@inject VerdictApp.Services.NotificationService NotificationSvc
 @attribute [Authorize]
 
 <div class="post-page">
@@ -203,6 +204,8 @@
 
         Db.Dilemmas.Add(dilemma);
         await Db.SaveChangesAsync();
+
+        await NotificationSvc.NotifyNewPostAsync(dilemma, user.Id);
 
         successMessage = "Your dilemma has been posted!";
         title = "";
