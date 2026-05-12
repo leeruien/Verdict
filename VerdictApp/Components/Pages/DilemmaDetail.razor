@@ -120,8 +120,15 @@ else
                     <div class="comment-card">
                         <div class="comment-header">
                             <div class="comment-avatar">@(comment.User?.DisplayName?[0].ToString().ToUpper() ?? "?")</div>
-                            <div>
-                                <span class="comment-username">@(comment.User?.DisplayName ?? "Unknown")</span>
+                            <div style="flex:1;">
+                                <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
+                                    <span class="comment-username">@(comment.User?.DisplayName ?? "Unknown")</span>
+                                    @{ var (label, css) = GetVoteBadge(comment.UserId); }
+                                    @if (!string.IsNullOrEmpty(label))
+                                    {
+                                        <span class="vote-badge @css">@label</span>
+                                    }
+                                </div>
                                 <span class="comment-date">@comment.CreatedAt.ToString("MMM d, yyyy · h:mm tt")</span>
                             </div>
                         </div>
@@ -149,8 +156,15 @@ else
                                     <div class="reply-card">
                                         <div class="comment-header">
                                             <div class="comment-avatar reply-avatar">@(reply.User?.DisplayName?[0].ToString().ToUpper() ?? "?")</div>
-                                            <div>
-                                                <span class="comment-username">@(reply.User?.DisplayName ?? "Unknown")</span>
+                                            <div style="flex:1;">
+                                                <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
+                                                    <span class="comment-username">@(reply.User?.DisplayName ?? "Unknown")</span>
+                                                    @{ var (rl, rc) = GetVoteBadge(reply.UserId); }
+                                                    @if (!string.IsNullOrEmpty(rl))
+                                                    {
+                                                        <span class="vote-badge @rc">@rl</span>
+                                                    }
+                                                </div>
                                                 <span class="comment-date">@reply.CreatedAt.ToString("MMM d, yyyy · h:mm tt")</span>
                                             </div>
                                         </div>
@@ -172,6 +186,7 @@ else
     private Dilemma? dilemma;
     private string? currentUserId;
     private HashSet<Guid> userVotedOptionIds = new();
+    private Dictionary<string, string> commenterVotes = new();
     private string newComment = "";
     private bool isBusy = false;
 
@@ -220,7 +235,15 @@ else
             .FirstOrDefaultAsync(d => d.Id == Id);
 
         if (dilemma == null)
+        {
             Nav.NavigateTo("/");
+            return;
+        }
+
+        commenterVotes = dilemma.Options
+            .SelectMany(o => o.Votes.Select(v => (v.UserId, o.OptionText)))
+            .GroupBy(x => x.UserId)
+            .ToDictionary(g => g.Key, g => g.First().OptionText);
     }
 
     private async Task CastVote(DilemmaOption option)
@@ -290,6 +313,14 @@ else
         replyingToCommentId = null;
         replyingToUsername = "";
         newComment = "";
+    }
+
+    private (string label, string css) GetVoteBadge(string? userId)
+    {
+        if (userId == null) return ("", "");
+        if (userId == dilemma?.UserId) return ("✍️ Posted this", "badge-poster");
+        if (commenterVotes.TryGetValue(userId, out var opt)) return ($"🗳️ {opt}", "badge-voted");
+        return ("👀 Hasn't voted", "badge-novote");
     }
 
     private bool HasVoted() =>
@@ -583,4 +614,15 @@ else
         color: #aaa;
         padding: 3rem 0;
     }
+
+    .vote-badge {
+        font-size: 0.72rem;
+        padding: 1px 7px;
+        border-radius: 20px;
+        white-space: nowrap;
+    }
+
+    .badge-voted  { background: #eef3ff; color: #052767; border: 1px solid #c5d5ff; }
+    .badge-poster { background: #fff3e0; color: #7a4500; border: 1px solid #ffd8a0; }
+    .badge-novote { background: #f5f5f5; color: #888;    border: 1px solid #e0e0e0; }
 </style>
