@@ -82,6 +82,22 @@ else
         error = null;
         isBusy = true;
 
+        var emailTaken = await UserManager.FindByEmailAsync(model.Email) != null;
+        if (emailTaken)
+        {
+            error = "An account with that email already exists.";
+            isBusy = false;
+            return;
+        }
+
+        var usernameTaken = UserManager.Users.Any(u => u.DisplayName.ToLower() == model.DisplayName.ToLower());
+        if (usernameTaken)
+        {
+            error = "That username is already taken.";
+            isBusy = false;
+            return;
+        }
+
         var user = new ApplicationUser
         {
             UserName = model.Email,
