@@ -38,16 +38,12 @@ public class NotificationService(ApplicationDbContext db)
 
     public async Task NotifyNewPostAsync(Dilemma dilemma, string posterUserId)
     {
-        // Notify users who have previously voted on a dilemma in the same category
-        var interestedUserIds = await db.Votes
-            .Include(v => v.DilemmaOption).ThenInclude(o => o.Dilemma)
-            .Where(v => v.DilemmaOption.Dilemma.Category == dilemma.Category
-                     && v.UserId != posterUserId)
-            .Select(v => v.UserId)
-            .Distinct()
+        var subscriberIds = await db.CategorySubscriptions
+            .Where(s => s.Category == dilemma.Category && s.UserId != posterUserId)
+            .Select(s => s.UserId)
             .ToListAsync();
 
-        var notifications = interestedUserIds.Select(uid => new Notification
+        var notifications = subscriberIds.Select(uid => new Notification
         {
             Id = Guid.NewGuid(),
             RecipientUserId = uid,
