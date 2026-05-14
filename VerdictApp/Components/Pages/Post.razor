@@ -196,6 +196,13 @@
         new("other",    "Other",     "🤔"),
     };
 
+    protected override async Task OnInitializedAsync()
+    {
+        var customCommunities = await Db.Communities.OrderBy(c => c.Name).ToListAsync();
+        foreach (var c in customCommunities)
+            categories.Add(new(c.Slug, c.Name, c.Icon));
+    }
+
     private List<TimeLimit> timeLimits = new()
     {
         new(1,   "1 hour"),

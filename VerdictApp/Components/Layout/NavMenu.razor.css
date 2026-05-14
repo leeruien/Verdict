@@ -107,6 +107,110 @@
     color: white;
 }
 
+.nav-divider {
+    border: none;
+    border-top: 1px solid rgba(255,255,255,0.15);
+    margin: 0.5rem 1rem;
+}
+
+.community-link {
+    color: #d7d7d7;
+    text-decoration: none;
+    background: none;
+    border: none;
+    border-radius: 4px;
+    height: 3rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    width: 100%;
+    padding: 0 0.5rem;
+    font-size: 0.9rem;
+}
+
+.community-link:hover {
+    background-color: rgba(255,255,255,0.1);
+    color: white;
+}
+
+.nav-section-label {
+    display: block;
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: rgba(255,255,255,0.35);
+    padding: 0.4rem 0.5rem 0.15rem;
+}
+
+.add-community-btn {
+    color: rgba(255,255,255,0.55);
+    text-decoration: none;
+    background: none;
+    border: none;
+    border-radius: 4px;
+    height: 3rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    width: 100%;
+    padding: 0 0.5rem;
+    font-size: 0.9rem;
+    cursor: pointer;
+    font-style: italic;
+}
+
+.add-community-btn:hover { color: white; background-color: rgba(255,255,255,0.1); }
+
+.community-form {
+    padding: 0.5rem 0.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.cf-input {
+    width: 100%;
+    padding: 0.4rem 0.6rem;
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 6px;
+    background: rgba(255,255,255,0.1);
+    color: white;
+    font-size: 0.82rem;
+    font-family: Georgia, serif;
+    box-sizing: border-box;
+    outline: none;
+}
+
+.cf-input::placeholder { color: rgba(255,255,255,0.4); }
+.cf-input:focus { border-color: rgba(255,255,255,0.5); }
+
+.cf-textarea { resize: vertical; min-height: 52px; }
+.cf-icon { width: 100%; }
+
+.cf-error { color: #f8a; font-size: 0.75rem; margin: 0; }
+
+.cf-actions {
+    display: flex;
+    gap: 0.4rem;
+}
+
+.cf-btn {
+    flex: 1;
+    padding: 0.35rem;
+    border-radius: 6px;
+    border: none;
+    font-size: 0.8rem;
+    cursor: pointer;
+    font-family: Georgia, serif;
+}
+
+.cf-create { background: white; color: #052767; font-weight: 600; }
+.cf-create:hover { background: #e8f0ff; }
+.cf-create:disabled { opacity: 0.6; cursor: not-allowed; }
+.cf-cancel { background: rgba(255,255,255,0.15); color: white; }
+.cf-cancel:hover { background: rgba(255,255,255,0.25); }
+
 .nav-scrollable {
     display: none;
 }

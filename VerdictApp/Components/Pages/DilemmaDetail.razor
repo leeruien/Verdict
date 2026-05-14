@@ -10,6 +10,8 @@
 @inject ApplicationDbContext Db
 @inject NavigationManager Nav
 @inject VerdictApp.Services.NotificationService NotificationSvc
+@inject IJSRuntime JS
+@inject VerdictApp.Services.RecentGroupsNotifier RecentNotifier
 
 @if (dilemma == null)
 {
@@ -218,6 +220,11 @@ else
         var user = await UserManager.GetUserAsync(authState.User);
         currentUserId = user?.Id;
 
+        var customCommunities = await Db.Communities.ToListAsync();
+        foreach (var c in customCommunities)
+            if (categories.All(x => x.Value != c.Slug))
+                categories.Add(new(c.Slug, c.Name, c.Icon));
+
         await LoadDilemma();
 
         if (currentUserId != null)
@@ -342,6 +349,18 @@ else
         if (diff.TotalHours < 1) return $"{(int)diff.TotalMinutes}m left";
         if (diff.TotalHours < 24) return $"{(int)diff.TotalHours}h left";
         return $"{(int)diff.TotalDays}d left";
+    }
+
+    private bool _recentsRecorded = false;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_recentsRecorded || dilemma == null || string.IsNullOrEmpty(dilemma.Category)) return;
+        var cat = categories.FirstOrDefault(c => c.Value == dilemma.Category);
+        if (cat == null) return;
+        _recentsRecorded = true;
+        await JS.InvokeVoidAsync("addRecentGroup", cat.Value, cat.Label, cat.Icon);
+        await RecentNotifier.NotifyVisitedAsync();
     }
 
     private string GetCategoryIcon(string? category) =>

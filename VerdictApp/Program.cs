@@ -37,6 +37,7 @@ builder.Services.AddAuthorization();
 builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddScoped<NotificationService>();
 builder.Services.AddHostedService<ExpiryNotificationService>();
+builder.Services.AddSingleton<RecentGroupsNotifier>();
 builder.Services.AddAntiforgery();
 builder.Services.AddRazorPages();
 

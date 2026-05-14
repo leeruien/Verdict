@@ -147,7 +147,7 @@
     private HashSet<string> subscribedCategories = new();
     private int communityDisplayCount = 4;
 
-    private record CategoryOption(string Value, string Label, string Icon);
+    private record CategoryOption(string Value, string Label, string Icon, bool IsCustom = false);
 
     private List<CategoryOption> categories = new()
     {
@@ -190,6 +190,10 @@
             .GroupBy(d => d.Category)
             .Select(g => new { Cat = g.Key, Count = g.Count() })
             .ToDictionaryAsync(x => x.Cat, x => x.Count);
+
+        var customCommunities = await Db.Communities.OrderBy(c => c.Name).ToListAsync();
+        foreach (var c in customCommunities)
+            categories.Add(new(c.Slug, c.Name, c.Icon, true));
 
         await LoadDilemmas();
     }

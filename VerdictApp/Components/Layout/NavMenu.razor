@@ -2,10 +2,15 @@
 @using Microsoft.AspNetCore.Identity
 @using Microsoft.EntityFrameworkCore
 @using System.Security.Claims
+@using System.Text.RegularExpressions
 @using VerdictApp.Data
 @using VerdictApp.Models
 @inject AuthenticationStateProvider AuthStateProvider
 @inject IServiceScopeFactory ScopeFactory
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+@inject VerdictApp.Services.RecentGroupsNotifier RecentNotifier
+@implements IDisposable
 
 <div class="top-row ps-3 navbar navbar-dark">
     <div class="container-fluid">
@@ -68,22 +73,98 @@
                 </div>
             </NotAuthorized>
         </AuthorizeView>
+
+        <!-- Community section -->
+        <div class="communities-nav-section" @onclick:stopPropagation="true">
+            <hr class="nav-divider" />
+
+            <div class="nav-item px-3">
+                @foreach (var c in communities)
+                {
+                    <a class="nav-link community-link" href="/group/@c.Slug">
+                        <span class="nav-icon">@c.Icon</span>
+                        <span class="nav-label">@c.Name</span>
+                    </a>
+                }
+
+                <AuthorizeView>
+                    <Authorized>
+                        @if (!showAddForm)
+                        {
+                            <button class="nav-link add-community-btn" @onclick="() => showAddForm = true">
+                                <span class="nav-icon">+</span>
+                                <span class="nav-label">Add community</span>
+                            </button>
+                        }
+                        else
+                        {
+                            <div class="community-form" @onclick:stopPropagation="true">
+                                <input class="cf-input" @bind="newName" placeholder="Community name *" maxlength="40" />
+                                <textarea class="cf-input cf-textarea" @bind="newDescription" placeholder="Description" rows="2" maxlength="200"></textarea>
+                                <input class="cf-input cf-icon" @bind="newIcon" placeholder="Icon emoji (optional)" maxlength="4" />
+                                @if (!string.IsNullOrEmpty(formError))
+                                {
+                                    <p class="cf-error">@formError</p>
+                                }
+                                <div class="cf-actions">
+                                    <button class="cf-btn cf-create" @onclick="CreateCommunity" disabled="@isCreating">
+                                        @(isCreating ? "Creating…" : "Create")
+                                    </button>
+                                    <button class="cf-btn cf-cancel" @onclick="CancelForm">Cancel</button>
+                                </div>
+                            </div>
+                        }
+                    </Authorized>
+                </AuthorizeView>
+            </div>
+
+            <hr class="nav-divider" />
+        </div>
+
+        @if (recentGroups.Length > 0)
+        {
+            <div class="nav-item px-3">
+                <span class="nav-section-label">Recents</span>
+                @foreach (var r in recentGroups)
+                {
+                    <a class="nav-link community-link" href="/group/@r.Slug">
+                        <span class="nav-icon">@r.Icon</span>
+                        <span class="nav-label">@r.Name</span>
+                    </a>
+                }
+            </div>
+            <hr class="nav-divider" />
+        }
+
     </nav>
 </div>
 
 @code {
     private int notifCount;
     private int inboxCount;
+    private List<Community> communities = new();
+    private RecentGroup[] recentGroups = Array.Empty<RecentGroup>();
+
+    private record RecentGroup(string Slug, string Name, string Icon);
+
+    private bool showAddForm = false;
+    private string newName = "";
+    private string newDescription = "";
+    private string newIcon = "";
+    private string formError = "";
+    private bool isCreating = false;
 
     protected override async Task OnInitializedAsync()
     {
         var authState = await AuthStateProvider.GetAuthenticationStateAsync();
-        // Read the user ID directly from claims — avoids touching the shared scoped DbContext
         var userId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        if (userId == null) return;
 
         await using var scope = ScopeFactory.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+        communities = await db.Communities.OrderBy(c => c.Name).ToListAsync();
+
+        if (userId == null) return;
 
         notifCount = await db.Notifications
             .CountAsync(n => n.RecipientUserId == userId && !n.IsRead);
@@ -91,4 +172,98 @@
         inboxCount = await db.Conversations
             .CountAsync(c => c.RecipientId == userId && c.Status == ConversationStatus.Pending);
     }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        recentGroups = await JS.InvokeAsync<RecentGroup[]>("getRecentGroups");
+        RecentNotifier.OnGroupVisited += HandleGroupVisited;
+        StateHasChanged();
+    }
+
+    private async Task HandleGroupVisited()
+    {
+        await InvokeAsync(async () =>
+        {
+            recentGroups = await JS.InvokeAsync<RecentGroup[]>("getRecentGroups");
+            StateHasChanged();
+        });
+    }
+
+    public void Dispose()
+    {
+        RecentNotifier.OnGroupVisited -= HandleGroupVisited;
+    }
+
+    private async Task CreateCommunity()
+    {
+        formError = "";
+        if (string.IsNullOrWhiteSpace(newName))
+        {
+            formError = "Name is required.";
+            return;
+        }
+
+        var slug = GenerateSlug(newName);
+        if (string.IsNullOrEmpty(slug))
+        {
+            formError = "Name must contain at least one letter or number.";
+            return;
+        }
+
+        isCreating = true;
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var userId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (userId == null) { isCreating = false; return; }
+
+        await using var scope = ScopeFactory.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+        if (await db.Communities.AnyAsync(c => c.Slug == slug))
+        {
+            formError = "A community with this name already exists.";
+            isCreating = false;
+            return;
+        }
+
+        var community = new Community
+        {
+            Id = Guid.NewGuid(),
+            Name = newName.Trim(),
+            Slug = slug,
+            Description = newDescription.Trim(),
+            Icon = string.IsNullOrWhiteSpace(newIcon) ? "🌐" : newIcon.Trim(),
+            CreatedByUserId = userId,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        db.Communities.Add(community);
+        await db.SaveChangesAsync();
+
+        communities.Add(community);
+        communities = communities.OrderBy(c => c.Name).ToList();
+
+        newName = "";
+        newDescription = "";
+        newIcon = "";
+        formError = "";
+        showAddForm = false;
+        isCreating = false;
+
+        Nav.NavigateTo($"/group/{slug}");
+    }
+
+    private void CancelForm()
+    {
+        showAddForm = false;
+        newName = "";
+        newDescription = "";
+        newIcon = "";
+        formError = "";
+    }
+
+    private static string GenerateSlug(string name) =>
+        Regex.Replace(name.Trim().ToLower(), @"[^a-z0-9\s-]", "")
+             .Trim()
+             .Replace(" ", "-");
 }

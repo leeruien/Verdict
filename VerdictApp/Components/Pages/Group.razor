@@ -8,6 +8,8 @@
 @inject AuthenticationStateProvider AuthStateProvider
 @inject ApplicationDbContext Db
 @inject NavigationManager Nav
+@inject IJSRuntime JS
+@inject VerdictApp.Services.RecentGroupsNotifier RecentNotifier
 
 @{
     var cat = categories.FirstOrDefault(c => c.Value == Category);
@@ -27,7 +29,10 @@ else
             <div class="group-icon">@cat.Icon</div>
             <div class="group-info">
                 <h1>@cat.Label</h1>
-                <h3 class="group-subtitle">A place to discuss @cat.Label-related dilemmas</h3>
+                @if (!string.IsNullOrWhiteSpace(cat.Description))
+                {
+                    <p class="group-desc">@cat.Description</p>
+                }
                 <div class="group-stats">
                     <span>@subscriberCount subscribers</span>
                     <span>@(dilemmas?.Count ?? 0) posts</span>
@@ -130,7 +135,7 @@ else
     private int subscriberCount;
     private bool isSubscribed;
 
-    private record CategoryOption(string Value, string Label, string Icon);
+    private record CategoryOption(string Value, string Label, string Icon, string Description = "");
     private List<CategoryOption> categories = new()
     {
         new("life",          "Life",          "🌱"),
@@ -145,6 +150,14 @@ else
 
     protected override async Task OnInitializedAsync()
     {
+        // If not a hardcoded category, check custom communities table
+        if (categories.All(c => c.Value != Category))
+        {
+            var custom = await Db.Communities.FirstOrDefaultAsync(c => c.Slug == Category);
+            if (custom != null)
+                categories.Add(new(custom.Slug, custom.Name, custom.Icon, custom.Description));
+        }
+
         var authState = await AuthStateProvider.GetAuthenticationStateAsync();
         var user = await UserManager.GetUserAsync(authState.User);
         currentUserId = user?.Id;
@@ -227,6 +240,15 @@ else
         StateHasChanged();
     }
 
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        var cat = categories.FirstOrDefault(c => c.Value == Category);
+        if (cat == null) return;
+        await JS.InvokeVoidAsync("addRecentGroup", cat.Value, cat.Label, cat.Icon);
+        await RecentNotifier.NotifyVisitedAsync();
+    }
+
     private string GetTimeLeft(DateTime? expiresAt)
     {
         if (!expiresAt.HasValue) return "No limit";
@@ -271,6 +293,7 @@ else
 
     .group-info { flex: 1; }
     .group-info h1 { margin: 0 0 0.25rem; font-size: 1.5rem; }
+    .group-desc    { margin: 0 0 0.4rem; font-size: 0.9rem; color: #555; }
 
     .group-stats { font-size: 0.82rem; color: #666; display: flex; gap: 1rem; }
     .group-subtitle {font-size: 0.95rem}

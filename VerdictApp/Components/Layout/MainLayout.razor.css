@@ -98,6 +98,10 @@ main {
         padding-left: 2rem !important;
         padding-right: 1.5rem !important;
     }
+
+    .sidebar.collapsed ::deep .communities-nav-section {
+        display: none;
+    }
 }
 
 #blazor-error-ui {
