@@ -39,6 +39,50 @@ else
             {
                 <img src="@dilemma.ImagePath" alt="Post image" class="detail-image" />
             }
+
+            @if (dilemma.UserId == currentUserId)
+            {
+                <div class="kebab-wrapper">
+                    <button class="kebab-btn" @onclick="() => showOwnerMenu = !showOwnerMenu">⋮</button>
+                    @if (showOwnerMenu)
+                    {
+                        <div class="kebab-menu">
+                            <button class="kebab-item" @onclick="() => { StartEdit(); showOwnerMenu = false; }">✏️ Edit description</button>
+                            <button class="kebab-item danger" @onclick="() => { showDeleteConfirm = true; showOwnerMenu = false; }">🗑️ Delete post</button>
+                        </div>
+                    }
+                </div>
+
+                @if (isEditingDescription)
+                {
+                    <div class="edit-desc-form">
+                        <textarea class="edit-desc-input" @bind="editedDescription" rows="4"></textarea>
+                        @if (showSaveEditConfirm)
+                        {
+                            <div class="confirm-bar neutral">
+                                <span>Save changes to your description?</span>
+                                <button class="confirm-yes" @onclick="SaveDescription">Save</button>
+                                <button class="confirm-no" @onclick="() => showSaveEditConfirm = false">Back</button>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="owner-actions">
+                                <button class="owner-btn" @onclick="() => showSaveEditConfirm = true">Save</button>
+                                <button class="owner-btn ghost" @onclick="CancelEdit">Cancel</button>
+                            </div>
+                        }
+                    </div>
+                }
+                else if (showDeleteConfirm)
+                {
+                    <div class="confirm-bar danger">
+                        <span>Permanently delete this post?</span>
+                        <button class="confirm-yes danger" @onclick="DeletePost" disabled="@isBusy">Delete</button>
+                        <button class="confirm-no" @onclick="() => showDeleteConfirm = false">Cancel</button>
+                    </div>
+                }
+            }
         </div>
 
         <div class="section">
@@ -56,9 +100,9 @@ else
                     var isOwner = dilemma.UserId == currentUserId;
                     var expired = IsExpired();
 
-                    <button class="option-btn @(userVotedThis ? "voted" : "") @(hasVoted && !userVotedThis ? "dimmed" : "")"
+                    <button class="option-btn @(userVotedThis ? "voted" : "") @(hasVoted && !isChangingVote && !userVotedThis ? "dimmed" : "")"
                             @onclick="() => CastVote(option)"
-                            disabled="@(hasVoted || isOwner || expired)">
+                            disabled="@((hasVoted && !isChangingVote) || isOwner || expired)">
                         <div class="option-content">
                             <span class="option-text">@option.OptionText</span>
                             @if (hasVoted || expired || isOwner)
@@ -84,6 +128,28 @@ else
             else if (IsExpired())
             {
                 <p class="info-msg">This dilemma has expired.</p>
+            }
+            else if (HasVoted() && !isChangingVote)
+            {
+                @if (showRemoveVoteConfirm)
+                {
+                    <div class="confirm-bar neutral">
+                        <span>Remove your vote?</span>
+                        <button class="confirm-yes" @onclick="RemoveVote">Remove</button>
+                        <button class="confirm-no" @onclick="() => showRemoveVoteConfirm = false">Cancel</button>
+                    </div>
+                }
+                else
+                {
+                    <div class="voter-actions">
+                        <button class="owner-btn" @onclick="StartChangeVote">🔄 Change vote</button>
+                        <button class="owner-btn ghost danger" @onclick="() => showRemoveVoteConfirm = true">✕ Remove vote</button>
+                    </div>
+                }
+            }
+            else if (isChangingVote)
+            {
+                <p class="info-msg">Select a new option above to change your vote.</p>
             }
         </div>
 
@@ -201,6 +267,17 @@ else
     private Guid? replyingToCommentId = null;
     private string replyingToUsername = "";
 
+    // Owner edit/delete state
+    private bool isEditingDescription = false;
+    private string editedDescription = "";
+    private bool showSaveEditConfirm = false;
+    private bool showDeleteConfirm = false;
+    private bool showOwnerMenu = false;
+
+    // Voter change/remove state
+    private bool isChangingVote = false;
+    private bool showRemoveVoteConfirm = false;
+
     private record CategoryOption(string Value, string Label, string Icon);
     private List<CategoryOption> categories = new()
     {
@@ -261,7 +338,21 @@ else
     private async Task CastVote(DilemmaOption option)
     {
         if (currentUserId == null) { Nav.NavigateTo("/login"); return; }
-        if (HasVoted() || IsExpired()) return;
+        if (IsExpired()) return;
+
+        if (isChangingVote)
+        {
+            // Remove existing vote first
+            var oldOptionId = userVotedOptionIds.FirstOrDefault();
+            if (oldOptionId != Guid.Empty)
+            {
+                var oldVote = await Db.Votes.FirstOrDefaultAsync(v => v.UserId == currentUserId && v.DilemmaOptionId == oldOptionId);
+                if (oldVote != null) Db.Votes.Remove(oldVote);
+                userVotedOptionIds.Remove(oldOptionId);
+            }
+            isChangingVote = false;
+        }
+        else if (HasVoted()) return;
 
         var vote = new Vote
         {
@@ -275,11 +366,89 @@ else
         await Db.SaveChangesAsync();
 
         var voter = await UserManager.FindByIdAsync(currentUserId);
-        if (voter != null && dilemma.UserId != currentUserId)
+        if (voter != null && dilemma!.UserId != currentUserId)
             await NotificationSvc.NotifyVoteAsync(voter.DisplayName ?? voter.Email ?? "Someone", dilemma);
 
         userVotedOptionIds.Add(option.Id);
-        option.Votes.Add(vote);
+        await LoadDilemma();
+        StateHasChanged();
+    }
+
+    // ── Owner: edit description ──────────────────────────────────────────
+    private void StartEdit()
+    {
+        editedDescription = dilemma?.Description ?? "";
+        isEditingDescription = true;
+        showSaveEditConfirm = false;
+        showDeleteConfirm = false;
+    }
+
+    private void CancelEdit()
+    {
+        isEditingDescription = false;
+        showSaveEditConfirm = false;
+    }
+
+    private async Task SaveDescription()
+    {
+        if (dilemma == null) return;
+        var entry = await Db.Dilemmas.FindAsync(dilemma.Id);
+        if (entry != null)
+        {
+            entry.Description = editedDescription.Trim();
+            await Db.SaveChangesAsync();
+            dilemma.Description = entry.Description;
+        }
+        isEditingDescription = false;
+        showSaveEditConfirm = false;
+        StateHasChanged();
+    }
+
+    // ── Owner: delete post ───────────────────────────────────────────────
+    private async Task DeletePost()
+    {
+        if (dilemma == null) return;
+        isBusy = true;
+
+        var notifs = await Db.Notifications.Where(n => n.DilemmaId == dilemma.Id).ToListAsync();
+        Db.Notifications.RemoveRange(notifs);
+
+        foreach (var opt in dilemma.Options)
+        {
+            var votes = await Db.Votes.Where(v => v.DilemmaOptionId == opt.Id).ToListAsync();
+            Db.Votes.RemoveRange(votes);
+        }
+        Db.DilemmaOptions.RemoveRange(dilemma.Options);
+
+        var comments = await Db.Comments.Where(c => c.DilemmaId == dilemma.Id).ToListAsync();
+        Db.Comments.RemoveRange(comments);
+
+        Db.Dilemmas.Remove(dilemma);
+        await Db.SaveChangesAsync();
+
+        Nav.NavigateTo("/");
+    }
+
+    // ── Voter: change / remove vote ──────────────────────────────────────
+    private void StartChangeVote()
+    {
+        isChangingVote = true;
+        showRemoveVoteConfirm = false;
+    }
+
+    private async Task RemoveVote()
+    {
+        if (currentUserId == null || dilemma == null) return;
+        var oldOptionId = userVotedOptionIds.FirstOrDefault();
+        if (oldOptionId != Guid.Empty)
+        {
+            var vote = await Db.Votes.FirstOrDefaultAsync(v => v.UserId == currentUserId && v.DilemmaOptionId == oldOptionId);
+            if (vote != null) Db.Votes.Remove(vote);
+            await Db.SaveChangesAsync();
+            userVotedOptionIds.Remove(oldOptionId);
+        }
+        showRemoveVoteConfirm = false;
+        await LoadDilemma();
         StateHasChanged();
     }
 
@@ -388,7 +557,7 @@ else
 
     .back-btn:hover { text-decoration: underline; }
 
-    .detail-header { margin-bottom: 2rem; }
+    .detail-header { margin-bottom: 2rem; position: relative; }
 
     .detail-meta {
         display: flex;
@@ -657,4 +826,136 @@ else
     .badge-voted  { background: #eef3ff; color: #052767; border: 1px solid #c5d5ff; }
     .badge-poster { background: #fff3e0; color: #7a4500; border: 1px solid #ffd8a0; }
     .badge-novote { background: #f5f5f5; color: #888;    border: 1px solid #e0e0e0; }
+
+    /* Kebab (3-dot) menu */
+    .kebab-wrapper {
+        position: absolute;
+        top: 0;
+        right: 0;
+    }
+
+    .kebab-btn {
+        background: none;
+        border: none;
+        font-size: 1.3rem;
+        color: #aaa;
+        cursor: pointer;
+        padding: 0 0.4rem;
+        line-height: 1;
+        border-radius: 6px;
+        transition: color 0.15s, background 0.15s;
+    }
+
+    .kebab-btn:hover { color: #333; background: #f0f0f0; }
+
+    .kebab-menu {
+        position: absolute;
+        top: calc(100% + 4px);
+        right: 0;
+        background: white;
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        min-width: 170px;
+        z-index: 20;
+        overflow: hidden;
+    }
+
+    .kebab-item {
+        display: block;
+        width: 100%;
+        padding: 0.6rem 1rem;
+        text-align: left;
+        background: none;
+        border: none;
+        cursor: pointer;
+        font-size: 0.88rem;
+        font-family: Georgia, serif;
+        color: #333;
+        transition: background 0.12s;
+    }
+
+    .kebab-item:hover        { background: #f5f5f5; }
+    .kebab-item.danger       { color: #dc2626; }
+    .kebab-item.danger:hover { background: #fff5f5; }
+
+    /* Owner / voter action buttons */
+    .owner-actions, .voter-actions {
+        display: flex;
+        gap: 0.5rem;
+        margin-top: 0.75rem;
+        flex-wrap: wrap;
+    }
+
+    .owner-btn {
+        padding: 0.35rem 0.85rem;
+        border: 1px solid #052767;
+        border-radius: 20px;
+        background: white;
+        color: #052767;
+        font-size: 0.82rem;
+        cursor: pointer;
+        font-family: Georgia, serif;
+        transition: all 0.15s;
+    }
+
+    .owner-btn:hover          { background: #f0f4ff; }
+    .owner-btn.ghost          { background: none; border-color: #ccc; color: #888; }
+    .owner-btn.ghost:hover    { border-color: #aaa; color: #555; background: #f5f5f5; }
+    .owner-btn.ghost.danger:hover { border-color: #e06c75; color: #e06c75; background: #fff5f5; }
+
+    /* Inline edit */
+    .edit-desc-form {
+        margin-top: 0.75rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .edit-desc-input {
+        width: 100%;
+        padding: 0.65rem 0.9rem;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        font-size: 0.92rem;
+        font-family: Georgia, serif;
+        resize: vertical;
+        box-sizing: border-box;
+        transition: border-color 0.2s;
+    }
+
+    .edit-desc-input:focus { outline: none; border-color: #052767; }
+
+    /* Confirmation bars */
+    .confirm-bar {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.6rem 1rem;
+        border-radius: 8px;
+        font-size: 0.85rem;
+        margin-top: 0.5rem;
+        flex-wrap: wrap;
+    }
+
+    .confirm-bar.danger  { background: #fff5f5; border: 1px solid #fecaca; color: #991b1b; }
+    .confirm-bar.neutral { background: #f0f4ff; border: 1px solid #c5d5ff; color: #1e3a8a; }
+
+    .confirm-yes, .confirm-no {
+        padding: 0.3rem 0.85rem;
+        border-radius: 20px;
+        border: none;
+        font-size: 0.82rem;
+        cursor: pointer;
+        font-family: Georgia, serif;
+        white-space: nowrap;
+    }
+
+    .confirm-yes        { background: #052767; color: white; }
+    .confirm-yes:hover  { background: #3a0647; }
+    .confirm-yes.danger         { background: #dc2626; }
+    .confirm-yes.danger:hover   { background: #b91c1c; }
+    .confirm-yes:disabled       { background: #aaa; cursor: not-allowed; }
+    .confirm-no         { background: #f3f4f6; color: #555; }
+    .confirm-no:hover   { background: #e5e7eb; }
 </style>
