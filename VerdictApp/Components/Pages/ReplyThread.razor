@@ -1,0 +1,65 @@
+@using VerdictApp.Models
+
+@if (Replies.Any())
+{
+    <div class="replies-list">
+        @foreach (var reply in Replies)
+        {
+            <div class="reply-card">
+                <div class="comment-header">
+                    @if (!string.IsNullOrWhiteSpace(reply.User?.ProfilePhotoPath))
+                    {
+                        <img src="@reply.User.ProfilePhotoPath" class="comment-avatar" style="object-fit:cover;" alt="" />
+                    }
+                    else
+                    {
+                        <div class="comment-avatar reply-avatar">@(reply.User?.DisplayName?[0].ToString().ToUpper() ?? "?")</div>
+                    }
+                    <div style="flex:1;">
+                        <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
+                            <span class="comment-username">@(reply.User?.DisplayName ?? "Unknown")</span>
+                            @if (GetVoteBadgeFunc != null)
+                            {
+                                var (label, css) = GetVoteBadgeFunc(reply.UserId);
+                                @if (!string.IsNullOrEmpty(label))
+                                {
+                                    <span class="vote-badge @css">@label</span>
+                                }
+                            }
+                        </div>
+                        <span class="comment-date">@reply.CreatedAt.ToString("MMM d, yyyy · h:mm tt")</span>
+                    </div>
+                </div>
+                <p class="comment-body">@reply.Body</p>
+                @if (CurrentUserId != null && !IsExpiredVal && OnStartReply != null)
+                {
+                    var username = reply.User?.DisplayName ?? "Unknown";
+                    <button class="reply-btn" @onclick="() => OnStartReply(reply.Id, username)">
+                        ↩ Reply
+                    </button>
+                }
+            </div>
+
+            <ReplyThread AllComments="AllComments"
+                         ParentId="reply.Id"
+                         CurrentUserId="CurrentUserId"
+                         IsExpiredVal="IsExpiredVal"
+                         OnStartReply="OnStartReply"
+                         GetVoteBadgeFunc="GetVoteBadgeFunc" />
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public List<Comment> AllComments { get; set; } = new();
+    [Parameter] public Guid ParentId { get; set; }
+    [Parameter] public string? CurrentUserId { get; set; }
+    [Parameter] public bool IsExpiredVal { get; set; }
+    [Parameter] public Action<Guid, string>? OnStartReply { get; set; }
+    [Parameter] public Func<string?, (string, string)>? GetVoteBadgeFunc { get; set; }
+
+    private List<Comment> Replies => AllComments
+        .Where(c => c.ParentCommentId == ParentId)
+        .OrderBy(c => c.CreatedAt)
+        .ToList();
+}

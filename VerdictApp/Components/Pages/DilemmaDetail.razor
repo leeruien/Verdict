@@ -222,37 +222,12 @@ else
                             </button>
                         }
 
-                        @{
-                            var replies = dilemma.Comments
-                                .Where(c => c.ParentCommentId == comment.Id)
-                                .OrderBy(c => c.CreatedAt)
-                                .ToList();
-                        }
-                        @if (replies.Any())
-                        {
-                            <div class="replies-list">
-                                @foreach (var reply in replies)
-                                {
-                                    <div class="reply-card">
-                                        <div class="comment-header">
-                                            <div class="comment-avatar reply-avatar">@(reply.User?.DisplayName?[0].ToString().ToUpper() ?? "?")</div>
-                                            <div style="flex:1;">
-                                                <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
-                                                    <span class="comment-username">@(reply.User?.DisplayName ?? "Unknown")</span>
-                                                    @{ var (rl, rc) = GetVoteBadge(reply.UserId); }
-                                                    @if (!string.IsNullOrEmpty(rl))
-                                                    {
-                                                        <span class="vote-badge @rc">@rl</span>
-                                                    }
-                                                </div>
-                                                <span class="comment-date">@reply.CreatedAt.ToString("MMM d, yyyy · h:mm tt")</span>
-                                            </div>
-                                        </div>
-                                        <p class="comment-body">@reply.Body</p>
-                                    </div>
-                                }
-                            </div>
-                        }
+                        <ReplyThread AllComments="@dilemma.Comments.ToList()"
+                                     ParentId="@comment.Id"
+                                     CurrentUserId="@currentUserId"
+                                     IsExpiredVal="@IsExpired()"
+                                     OnStartReply="@((id, name) => { StartReply(id, name); StateHasChanged(); })"
+                                     GetVoteBadgeFunc="@GetVoteBadge" />
                     </div>
                 }
             }
@@ -809,6 +784,7 @@ else
         border-radius: 6px;
         padding: 0.65rem 0.85rem;
     }
+
 
     .empty-state {
         text-align: center;
