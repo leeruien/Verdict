@@ -188,7 +188,7 @@ else
             {
                 @foreach (var comment in dilemma.Comments
                     .Where(c => c.ParentCommentId == null)
-                    .OrderByDescending(c => c.CreatedAt))
+                    .OrderBy(c => c.CreatedAt))
                 {
                     <div class="comment-card">
                         <div class="comment-header">
@@ -216,17 +216,34 @@ else
 
                         @if (currentUserId != null && !IsExpired())
                         {
-                            var commentUsername = comment.User?.DisplayName ?? "Unknown";
-                            <button class="reply-btn" @onclick="() => StartReply(comment.Id, commentUsername)">
+                            <button class="reply-btn" @onclick="() => ToggleCommentReply(comment.Id)">
                                 ↩ Reply
                             </button>
+                        }
+
+                        @if (activeCommentReplyId == comment.Id)
+                        {
+                            <div class="inline-reply-form">
+                                <textarea @bind="commentInlineText" @bind:event="oninput"
+                                          placeholder="Write a reply…"
+                                          class="comment-input"
+                                          rows="2"></textarea>
+                                <div class="inline-reply-actions">
+                                    <button class="comment-submit-btn"
+                                            @onclick="() => PostCommentReplyInline(comment.Id)"
+                                            disabled="@(isBusy || string.IsNullOrWhiteSpace(commentInlineText))">
+                                        Post
+                                    </button>
+                                    <button class="inline-cancel-btn" @onclick="CancelCommentReply">Cancel</button>
+                                </div>
+                            </div>
                         }
 
                         <ReplyThread AllComments="@dilemma.Comments.ToList()"
                                      ParentId="@comment.Id"
                                      CurrentUserId="@currentUserId"
                                      IsExpiredVal="@IsExpired()"
-                                     OnStartReply="@((id, name) => { StartReply(id, name); StateHasChanged(); })"
+                                     OnPostReply="@PostReplyInline"
                                      GetVoteBadgeFunc="@GetVoteBadge" />
                     </div>
                 }
@@ -247,6 +264,8 @@ else
 
     // Reply state
     private Guid? replyingToCommentId = null;
+    private Guid? activeCommentReplyId;
+    private string commentInlineText = "";
     private string replyingToUsername = "";
 
     // Owner edit/delete state
@@ -469,6 +488,53 @@ else
         replyingToCommentId = commentId;
         replyingToUsername = username;
         newComment = "";
+    }
+
+    private void ToggleCommentReply(Guid commentId)
+    {
+        activeCommentReplyId = activeCommentReplyId == commentId ? null : commentId;
+        commentInlineText = "";
+    }
+
+    private void CancelCommentReply()
+    {
+        activeCommentReplyId = null;
+        commentInlineText = "";
+    }
+
+    private async Task PostCommentReplyInline(Guid parentId)
+    {
+        if (string.IsNullOrWhiteSpace(commentInlineText)) return;
+        await PostReplyInline(parentId, commentInlineText.Trim());
+        activeCommentReplyId = null;
+        commentInlineText = "";
+    }
+
+    private async Task PostReplyInline(Guid parentId, string body)
+    {
+        if (currentUserId == null || string.IsNullOrWhiteSpace(body)) return;
+        isBusy = true;
+
+        var comment = new Comment
+        {
+            Id = Guid.NewGuid(),
+            UserId = currentUserId,
+            DilemmaId = Id,
+            Body = body,
+            CreatedAt = DateTime.UtcNow,
+            ParentCommentId = parentId
+        };
+
+        Db.Comments.Add(comment);
+        await Db.SaveChangesAsync();
+
+        var commenter = await UserManager.FindByIdAsync(currentUserId);
+        if (commenter != null && dilemma != null)
+            await NotificationSvc.NotifyCommentAsync(commenter.DisplayName ?? commenter.Email ?? "Someone", dilemma, currentUserId);
+
+        await LoadDilemma();
+        isBusy = false;
+        StateHasChanged();
     }
 
     private void CancelReply()
@@ -764,11 +830,54 @@ else
         font-size: 0.8rem;
         cursor: pointer;
         padding: 0.25rem 0;
-        margin-top: 0.4rem;
         font-family: Georgia, serif;
     }
 
+    .reply-action-row {
+        display: flex;
+        align-items: center;
+        gap: 1.25rem;
+    }
+
     .reply-btn:hover { color: #052767; }
+
+    .inline-reply-form {
+        margin: 0.4rem 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
+    }
+
+    .inline-reply-actions {
+        display: flex;
+        gap: 0.5rem;
+        justify-content: flex-end;
+    }
+
+    .inline-cancel-btn {
+        background: none;
+        border: 1px solid #ccc;
+        border-radius: 8px;
+        padding: 0.4rem 0.9rem;
+        font-size: 0.85rem;
+        cursor: pointer;
+        color: #666;
+        font-family: Georgia, serif;
+    }
+
+    .inline-cancel-btn:hover { border-color: #999; color: #333; }
+
+    .show-more-btn {
+        background: none;
+        border: none;
+        color: #888;
+        font-size: 0.8rem;
+        cursor: pointer;
+        padding: 0.2rem 0;
+        font-family: Georgia, serif;
+    }
+
+    .show-more-btn:hover { color: #052767; }
 
     .replies-list {
         margin-top: 0.75rem;

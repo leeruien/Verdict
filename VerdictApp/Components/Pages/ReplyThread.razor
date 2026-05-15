@@ -5,6 +5,8 @@
     <div class="replies-list">
         @foreach (var reply in Replies)
         {
+            var childCount = CountDescendants(reply.Id);
+
             <div class="reply-card">
                 <div class="comment-header">
                     @if (!string.IsNullOrWhiteSpace(reply.User?.ProfilePhotoPath))
@@ -31,21 +33,55 @@
                     </div>
                 </div>
                 <p class="comment-body">@reply.Body</p>
-                @if (CurrentUserId != null && !IsExpiredVal && OnStartReply != null)
-                {
-                    var username = reply.User?.DisplayName ?? "Unknown";
-                    <button class="reply-btn" @onclick="() => OnStartReply(reply.Id, username)">
-                        ↩ Reply
-                    </button>
-                }
+                <div class="reply-action-row">
+                    @if (CurrentUserId != null && !IsExpiredVal)
+                    {
+                        <button class="reply-btn" @onclick="() => ToggleInlineReply(reply.Id)">↩ Reply</button>
+                    }
+                    @if (childCount > 3 && !expandedThreads.Contains(reply.Id) && !ForceExpanded)
+                    {
+                        <button class="show-more-btn" @onclick="() => ExpandThread(reply.Id)">
+                            ↓ Show @childCount repl@(childCount == 1 ? "y" : "ies")
+                        </button>
+                    }
+                </div>
             </div>
 
-            <ReplyThread AllComments="AllComments"
-                         ParentId="reply.Id"
-                         CurrentUserId="CurrentUserId"
-                         IsExpiredVal="IsExpiredVal"
-                         OnStartReply="OnStartReply"
-                         GetVoteBadgeFunc="GetVoteBadgeFunc" />
+            @if (activeInlineReplyId == reply.Id)
+            {
+                <div class="inline-reply-form">
+                    <textarea @bind="inlineText" @bind:event="oninput"
+                              placeholder="Write a reply…"
+                              class="comment-input"
+                              rows="2"></textarea>
+                    <div class="inline-reply-actions">
+                        <button class="comment-submit-btn"
+                                @onclick="() => PostInlineReply(reply.Id)"
+                                disabled="@(isPosting || string.IsNullOrWhiteSpace(inlineText))">
+                            Post
+                        </button>
+                        <button class="inline-cancel-btn" @onclick="CancelInlineReply">Cancel</button>
+                    </div>
+                </div>
+            }
+
+            @if (ForceExpanded || childCount <= 3 || expandedThreads.Contains(reply.Id))
+            {
+                <ReplyThread AllComments="AllComments"
+                             ParentId="reply.Id"
+                             CurrentUserId="CurrentUserId"
+                             IsExpiredVal="IsExpiredVal"
+                             ForceExpanded="@(ForceExpanded || expandedThreads.Contains(reply.Id))"
+                             OnPostReply="OnPostReply"
+                             GetVoteBadgeFunc="GetVoteBadgeFunc" />
+            }
+
+            @if (childCount > 3 && expandedThreads.Contains(reply.Id) && !ForceExpanded)
+            {
+                <button class="show-more-btn" @onclick="() => { expandedThreads.Remove(reply.Id); StateHasChanged(); }">
+                    ↑ Collapse replies
+                </button>
+            }
         }
     </div>
 }
@@ -55,11 +91,54 @@
     [Parameter] public Guid ParentId { get; set; }
     [Parameter] public string? CurrentUserId { get; set; }
     [Parameter] public bool IsExpiredVal { get; set; }
-    [Parameter] public Action<Guid, string>? OnStartReply { get; set; }
+    [Parameter] public bool ForceExpanded { get; set; }
+    [Parameter] public Func<Guid, string, Task>? OnPostReply { get; set; }
     [Parameter] public Func<string?, (string, string)>? GetVoteBadgeFunc { get; set; }
+
+    private Guid? activeInlineReplyId;
+    private string inlineText = "";
+    private bool isPosting;
+    private HashSet<Guid> expandedThreads = new();
 
     private List<Comment> Replies => AllComments
         .Where(c => c.ParentCommentId == ParentId)
         .OrderBy(c => c.CreatedAt)
         .ToList();
+
+    private int CountDescendants(Guid parentId)
+    {
+        var children = AllComments.Where(c => c.ParentCommentId == parentId).ToList();
+        return children.Count + children.Sum(c => CountDescendants(c.Id));
+    }
+
+    private void ExpandThread(Guid replyId)
+    {
+        expandedThreads.Add(replyId);
+        StateHasChanged();
+    }
+
+    private void ToggleInlineReply(Guid replyId)
+    {
+        activeInlineReplyId = activeInlineReplyId == replyId ? null : replyId;
+        inlineText = "";
+        StateHasChanged();
+    }
+
+    private void CancelInlineReply()
+    {
+        activeInlineReplyId = null;
+        inlineText = "";
+        StateHasChanged();
+    }
+
+    private async Task PostInlineReply(Guid parentId)
+    {
+        if (string.IsNullOrWhiteSpace(inlineText) || OnPostReply == null) return;
+        isPosting = true;
+        expandedThreads.Add(parentId);
+        await OnPostReply(parentId, inlineText.Trim());
+        inlineText = "";
+        activeInlineReplyId = null;
+        isPosting = false;
+    }
 }
