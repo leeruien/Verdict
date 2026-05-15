@@ -113,10 +113,10 @@
                                     <span class="option-percent">@percent%</span>
                                 }
                             </div>
-                            @if (votedOnThis)
+                            @if (votedOnThis || isOwner)
                             {
                                 <div class="progress-bar">
-                                    <div class="progress-fill @(userVotedThis ? "fill-voted" : "")" style="width: @(percent)%"></div>
+                                    <div class="progress-fill @(userVotedThis || isOwner ? "fill-voted" : "")" style="width: @(percent)%"></div>
                                 </div>
                             }
                         </button>
