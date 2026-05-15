@@ -20,9 +20,21 @@ else
     <div class="profile-page">
 
         <div class="profile-header">
-            <div class="avatar">@user.DisplayName![0].ToString().ToUpper()</div>
+            <a href="/settings" class="settings-btn" title="Settings">&#9881;</a>
+            @if (!string.IsNullOrWhiteSpace(user.ProfilePhotoPath))
+            {
+                <img src="@user.ProfilePhotoPath" class="avatar avatar-photo" alt="Profile photo" />
+            }
+            else
+            {
+                <div class="avatar">@user.DisplayName![0].ToString().ToUpper()</div>
+            }
             <h1>@user.DisplayName</h1>
             <p class="profile-email">@user.Email</p>
+            @if (!string.IsNullOrWhiteSpace(user.Bio))
+            {
+                <p class="profile-bio">@user.Bio</p>
+            }
         </div>
 
         <div class="profile-tabs">
@@ -146,7 +158,21 @@ else
     .profile-header {
         text-align: center;
         margin-bottom: 2rem;
+        position: relative;
     }
+
+    .settings-btn {
+        position: absolute;
+        top: 0;
+        right: 0;
+        font-size: 2.1rem;
+        color: #aaa;
+        text-decoration: none;
+        line-height: 1;
+        transition: color 0.2s;
+    }
+
+    .settings-btn:hover { color: #052767; }
 
     .avatar {
         width: 72px;
@@ -163,6 +189,8 @@ else
 
     .profile-header h1 { margin: 0; font-size: 1.8rem; }
     .profile-email     { color: #888; margin: 0.25rem 0 0; }
+    .avatar-photo      { object-fit: cover; }
+    .profile-bio       { color: #555; font-size: 0.95rem; margin: 0.6rem auto 0; max-width: 420px; line-height: 1.5; }
 
     .profile-tabs {
         display: flex;

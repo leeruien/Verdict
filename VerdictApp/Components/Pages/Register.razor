@@ -1,5 +1,4 @@
 @page "/register"
-@rendermode InteractiveServer
 @using System.ComponentModel.DataAnnotations
 @using Microsoft.AspNetCore.Identity
 @using VerdictApp.Data
@@ -67,6 +66,7 @@ else
 </p>
 
 @code {
+    [SupplyParameterFromForm(FormName = "RegisterForm")]
     public RegisterModel model { get; set; } = new();
 
     private string? error;

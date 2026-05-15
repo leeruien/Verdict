@@ -192,7 +192,14 @@ else
                 {
                     <div class="comment-card">
                         <div class="comment-header">
-                            <div class="comment-avatar">@(comment.User?.DisplayName?[0].ToString().ToUpper() ?? "?")</div>
+                            @if (!string.IsNullOrWhiteSpace(comment.User?.ProfilePhotoPath))
+                            {
+                                <img src="@comment.User.ProfilePhotoPath" class="comment-avatar" style="object-fit:cover;" alt="" />
+                            }
+                            else
+                            {
+                                <div class="comment-avatar">@(comment.User?.DisplayName?[0].ToString().ToUpper() ?? "?")</div>
+                            }
                             <div style="flex:1;">
                                 <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
                                     <span class="comment-username">@(comment.User?.DisplayName ?? "Unknown")</span>
