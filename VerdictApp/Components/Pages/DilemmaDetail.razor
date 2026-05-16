@@ -28,16 +28,21 @@ else
                     <span class="category-tag">@GetCategoryIcon(dilemma.Category) @dilemma.Category</span>
                 }
                 <span class="time-left">⏱ @GetTimeLeft(dilemma.ExpiresAt)</span>
-                <span class="user">@(dilemma.User?.DisplayName ?? dilemma.User?.UserName ?? "Unknown")</span>
+                <a class="user username-link" href="/user/@dilemma.UserId">@(dilemma.User?.DisplayName ?? dilemma.User?.UserName ?? "Unknown")</a>
             </div>
             <h1 class="detail-title">@dilemma.Title</h1>
             @if (!string.IsNullOrWhiteSpace(dilemma.Description))
             {
                 <p class="detail-desc">@dilemma.Description</p>
             }
-            @if (!string.IsNullOrEmpty(dilemma.ImagePath))
+            @if (dilemma.ImagePathList.Any())
             {
-                <img src="@dilemma.ImagePath" alt="Post image" class="detail-image" />
+                <div class="image-gallery @(dilemma.ImagePathList.Count > 1 ? "multi" : "")">
+                    @foreach (var path in dilemma.ImagePathList)
+                    {
+                        <img src="@path" alt="Post image" class="gallery-img" />
+                    }
+                </div>
             }
 
             @if (dilemma.UserId == currentUserId)
@@ -202,7 +207,7 @@ else
                             }
                             <div style="flex:1;">
                                 <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
-                                    <span class="comment-username">@(comment.User?.DisplayName ?? "Unknown")</span>
+                                    <a class="comment-username username-link" href="/user/@comment.UserId">@(comment.User?.DisplayName ?? "Unknown")</a>
                                     @{ var (label, css) = GetVoteBadge(comment.UserId); }
                                     @if (!string.IsNullOrEmpty(label))
                                     {
@@ -735,12 +740,26 @@ else
 
     .detail-desc { font-size: 0.95rem; color: #555; margin: 0; }
 
-    .detail-image {
+    .image-gallery {
+        margin-top: 1rem;
+    }
+
+    .image-gallery.multi {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 0.4rem;
+    }
+
+    .gallery-img {
         width: 100%;
         max-height: 420px;
         object-fit: cover;
         border-radius: 10px;
-        margin-top: 1rem;
+    }
+
+    .image-gallery.multi .gallery-img {
+        max-height: 220px;
+        border-radius: 8px;
     }
 
     .section { margin-bottom: 2.5rem; }
@@ -911,6 +930,14 @@ else
         font-size: 0.88rem;
         display: block;
     }
+
+    .username-link {
+        color: inherit;
+        text-decoration: none;
+        font-weight: 600;
+    }
+
+    .username-link:hover { text-decoration: underline; color: #052767; }
 
     .comment-date {
         font-size: 0.75rem;

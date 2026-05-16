@@ -23,7 +23,7 @@ else
 {
     <div class="group-page">
 
-        <a class="back-btn" href="/">← Back</a>
+        <a class="back-btn" href="javascript:history.back()">← Back</a>
 
         <div class="group-header">
             <div class="group-icon">@cat.Icon</div>
@@ -77,15 +77,15 @@ else
                         @onclick='() => Nav.NavigateTo($"/dilemma/{dilemma.Id}")'>
                         @dilemma.Title
                     </h2>
-                    <span class="post-author">by @(dilemma.User?.DisplayName ?? dilemma.User?.UserName ?? "Unknown")</span>
+                    <span class="post-author">by <a class="username-link" href="/user/@dilemma.UserId" @onclick:stopPropagation="true">@(dilemma.User?.DisplayName ?? dilemma.User?.UserName ?? "Unknown")</a></span>
 
                     @if (!string.IsNullOrWhiteSpace(dilemma.Description))
                     {
                         <p class="dilemma-desc">@dilemma.Description</p>
                     }
-                    @if (!string.IsNullOrEmpty(dilemma.ImagePath))
+                    @if (dilemma.ImagePathList.Any())
                     {
-                        <img src="@dilemma.ImagePath" alt="Post image" class="card-image" />
+                        <img src="@dilemma.ImagePathList[0]" alt="Post image" class="card-image" />
                     }
 
                     <div class="options-list">
@@ -333,6 +333,8 @@ else
 
     .dilemma-title { font-size: 1.15rem; margin: 0 0 0.15rem; font-weight: 700; }
     .post-author   { font-size: 0.78rem; color: #aaa; display: block; margin-bottom: 0.5rem; }
+    .username-link { color: inherit; text-decoration: none; }
+    .username-link:hover { text-decoration: underline; color: #052767; }
     .dilemma-desc  { font-size: 0.9rem; color: #555; margin: 0 0 0.75rem; }
 
     .card-image {

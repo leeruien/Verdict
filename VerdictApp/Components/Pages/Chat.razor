@@ -26,7 +26,7 @@ else
             <a class="back-btn" href="/inbox">← Inbox</a>
             <div class="chat-with">
                 <div class="avatar">@(other.DisplayName?[0].ToString().ToUpper() ?? "?")</div>
-                <span>@other.DisplayName</span>
+                <a class="username-link" href="/user/@other.Id">@other.DisplayName</a>
             </div>
         </div>
 

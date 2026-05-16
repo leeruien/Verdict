@@ -19,7 +19,7 @@
                     }
                     <div style="flex:1;">
                         <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
-                            <span class="comment-username">@(reply.User?.DisplayName ?? "Unknown")</span>
+                            <a class="comment-username username-link" href="/user/@reply.UserId">@(reply.User?.DisplayName ?? "Unknown")</a>
                             @if (GetVoteBadgeFunc != null)
                             {
                                 var (label, css) = GetVoteBadgeFunc(reply.UserId);

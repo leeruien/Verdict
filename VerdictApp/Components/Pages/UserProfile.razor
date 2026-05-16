@@ -1,0 +1,365 @@
+@page "/user/{UserId}"
+@rendermode InteractiveServer
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.EntityFrameworkCore
+@using VerdictApp.Data
+@using VerdictApp.Models
+@inject UserManager<ApplicationUser> UserManager
+@inject AuthenticationStateProvider AuthStateProvider
+@inject ApplicationDbContext Db
+@inject NavigationManager Nav
+
+@if (profileUser == null)
+{
+    <p class="loading">Loading...</p>
+}
+else
+{
+    <div class="userprofile-page">
+        <a class="back-btn" href="javascript:history.back()">← Back</a>
+
+        <div class="profile-header">
+            @if (!string.IsNullOrWhiteSpace(profileUser.ProfilePhotoPath))
+            {
+                <img src="@profileUser.ProfilePhotoPath" class="avatar avatar-photo" alt="Profile photo" />
+            }
+            else
+            {
+                <div class="avatar">@(profileUser.DisplayName?[0].ToString().ToUpper() ?? "?")</div>
+            }
+            <h1>@profileUser.DisplayName</h1>
+            @if (!string.IsNullOrWhiteSpace(profileUser.Bio))
+            {
+                <p class="profile-bio">@profileUser.Bio</p>
+            }
+
+            @if (currentUserId != null && currentUserId != UserId)
+            {
+                @if (showCompose)
+                {
+                    <div class="compose-box">
+                        <textarea class="msg-input" rows="3"
+                                  placeholder="Write your message…"
+                                  @bind="composeBody"></textarea>
+                        <div class="compose-actions">
+                            <button class="send-btn" @onclick="SendMessage"
+                                    disabled="@(isSending || string.IsNullOrWhiteSpace(composeBody))">
+                                @(isSending ? "Sending…" : "Send")
+                            </button>
+                            <button class="cancel-btn" @onclick="CancelCompose">Cancel</button>
+                        </div>
+                        @if (!string.IsNullOrEmpty(composeError))
+                        {
+                            <p class="error-msg">@composeError</p>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <button class="message-btn" @onclick="() => showCompose = true">✉️ Message</button>
+                }
+            }
+            else if (currentUserId == UserId)
+            {
+                <a class="message-btn" href="/profile">Edit Profile</a>
+            }
+        </div>
+
+        <div class="profile-tabs">
+            <button class="@TabClass("posts")" @onclick='() => activeTab = "posts"'>
+                Posts <span class="badge">@posts.Count</span>
+            </button>
+            <button class="@TabClass("comments")" @onclick='() => activeTab = "comments"'>
+                Comments <span class="badge">@comments.Count</span>
+            </button>
+        </div>
+
+        <div class="profile-content">
+            @if (activeTab == "posts")
+            {
+                @if (!posts.Any())
+                {
+                    <p class="empty-state">No dilemmas posted yet.</p>
+                }
+                @foreach (var post in posts)
+                {
+                    <div class="card" style="cursor:pointer" @onclick='() => Nav.NavigateTo($"/dilemma/{post.Id}")'>
+                        <div class="card-title">@post.Title</div>
+                        <div class="card-meta">
+                            @post.CreatedAt.ToLocalTime().ToString("MMM d, yyyy") ·
+                            @post.Options.Sum(o => o.Votes.Count) votes ·
+                            @post.Comments.Count comments
+                        </div>
+                    </div>
+                }
+            }
+
+            @if (activeTab == "comments")
+            {
+                @if (!comments.Any())
+                {
+                    <p class="empty-state">No comments yet.</p>
+                }
+                @foreach (var comment in comments)
+                {
+                    <div class="card" style="cursor:pointer" @onclick='() => Nav.NavigateTo($"/dilemma/{comment.DilemmaId}")'>
+                        <div class="card-title">@comment.Dilemma.Title</div>
+                        <div class="card-body-text">@comment.Body</div>
+                        <div class="card-meta">@comment.CreatedAt.ToLocalTime().ToString("MMM d, yyyy")</div>
+                    </div>
+                }
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public string UserId { get; set; } = "";
+
+    private ApplicationUser? profileUser;
+    private string? currentUserId;
+    private List<Dilemma> posts    = new();
+    private List<Comment> comments = new();
+    private string activeTab       = "posts";
+
+    private bool showCompose  = false;
+    private string composeBody = "";
+    private string composeError = "";
+    private bool isSending    = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var me = await UserManager.GetUserAsync(authState.User);
+        currentUserId = me?.Id;
+
+        profileUser = await UserManager.FindByIdAsync(UserId);
+        if (profileUser == null) { Nav.NavigateTo("/"); return; }
+
+        posts = await Db.Dilemmas
+            .Where(d => d.UserId == UserId)
+            .Include(d => d.Options).ThenInclude(o => o.Votes)
+            .Include(d => d.Comments)
+            .OrderByDescending(d => d.CreatedAt)
+            .ToListAsync();
+
+        comments = await Db.Comments
+            .Where(c => c.UserId == UserId && c.ParentCommentId == null)
+            .Include(c => c.Dilemma)
+            .OrderByDescending(c => c.CreatedAt)
+            .ToListAsync();
+    }
+
+    private async Task SendMessage()
+    {
+        if (currentUserId == null || string.IsNullOrWhiteSpace(composeBody)) return;
+        isSending = true;
+        composeError = "";
+
+        var existing = await Db.Conversations.FirstOrDefaultAsync(c =>
+            (c.InitiatorId == currentUserId && c.RecipientId == UserId) ||
+            (c.InitiatorId == UserId        && c.RecipientId == currentUserId));
+
+        if (existing != null)
+        {
+            Nav.NavigateTo($"/inbox/{existing.Id}");
+            return;
+        }
+
+        var convo = new Conversation
+        {
+            Id          = Guid.NewGuid(),
+            InitiatorId = currentUserId,
+            RecipientId = UserId,
+            Status      = ConversationStatus.Pending,
+            CreatedAt   = DateTime.UtcNow
+        };
+        Db.Conversations.Add(convo);
+        Db.DirectMessages.Add(new DirectMessage
+        {
+            Id             = Guid.NewGuid(),
+            ConversationId = convo.Id,
+            SenderId       = currentUserId,
+            Body           = composeBody.Trim(),
+            SentAt         = DateTime.UtcNow
+        });
+        await Db.SaveChangesAsync();
+        Nav.NavigateTo($"/inbox/{convo.Id}");
+    }
+
+    private void CancelCompose()
+    {
+        showCompose  = false;
+        composeBody  = "";
+        composeError = "";
+    }
+
+    private string TabClass(string tab) => "tab-btn " + (activeTab == tab ? "active" : "");
+}
+
+<style>
+    .userprofile-page {
+        max-width: 680px;
+        margin: 2rem auto;
+        padding: 0 1rem;
+        font-family: Georgia, serif;
+    }
+
+    .back-btn {
+        color: #052767;
+        font-size: 0.9rem;
+        text-decoration: none;
+        display: inline-block;
+        margin-bottom: 1.5rem;
+    }
+
+    .back-btn:hover { text-decoration: underline; }
+
+    .profile-header {
+        text-align: center;
+        margin-bottom: 2rem;
+    }
+
+    .avatar {
+        width: 72px;
+        height: 72px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #052767, #3a0647);
+        color: white;
+        font-size: 2rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 1rem;
+        font-weight: 700;
+    }
+
+    .avatar-photo { object-fit: cover; }
+
+    .profile-header h1  { margin: 0; font-size: 1.8rem; }
+    .profile-bio        { color: #555; font-size: 0.95rem; margin: 0.5rem auto 0; max-width: 420px; line-height: 1.5; }
+
+    .message-btn {
+        display: inline-block;
+        margin-top: 1rem;
+        padding: 0.45rem 1.2rem;
+        background: #052767;
+        color: white;
+        border: none;
+        border-radius: 20px;
+        font-size: 0.88rem;
+        font-family: Georgia, serif;
+        cursor: pointer;
+        text-decoration: none;
+        transition: background 0.15s;
+    }
+
+    .message-btn:hover { background: #3a0647; }
+
+    .compose-box {
+        margin-top: 1rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        max-width: 420px;
+        margin-left: auto;
+        margin-right: auto;
+        text-align: left;
+    }
+
+    .msg-input {
+        width: 100%;
+        padding: 0.65rem 0.85rem;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        font-size: 0.9rem;
+        font-family: Georgia, serif;
+        resize: vertical;
+        box-sizing: border-box;
+    }
+
+    .msg-input:focus { outline: none; border-color: #052767; }
+
+    .compose-actions {
+        display: flex;
+        gap: 0.5rem;
+        justify-content: flex-end;
+    }
+
+    .send-btn {
+        padding: 0.45rem 1.1rem;
+        background: #052767;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-size: 0.88rem;
+        font-family: Georgia, serif;
+        cursor: pointer;
+    }
+
+    .send-btn:hover:not(:disabled) { background: #3a0647; }
+    .send-btn:disabled { background: #aaa; cursor: not-allowed; }
+
+    .cancel-btn {
+        padding: 0.45rem 1rem;
+        background: none;
+        border: 1px solid #ccc;
+        border-radius: 8px;
+        font-size: 0.88rem;
+        font-family: Georgia, serif;
+        cursor: pointer;
+        color: #666;
+    }
+
+    .cancel-btn:hover { border-color: #999; color: #333; }
+
+    .error-msg { color: #c0392b; font-size: 0.83rem; margin: 0; }
+
+    .profile-tabs {
+        display: flex;
+        border-bottom: 2px solid #e0e0e0;
+        margin-bottom: 1.5rem;
+        gap: 0.5rem;
+    }
+
+    .tab-btn {
+        background: none;
+        border: none;
+        padding: 0.6rem 1.2rem;
+        cursor: pointer;
+        font-size: 0.95rem;
+        color: #666;
+        border-bottom: 3px solid transparent;
+        margin-bottom: -2px;
+        transition: color 0.2s, border-color 0.2s;
+        font-family: Georgia, serif;
+    }
+
+    .tab-btn.active { color: #052767; border-bottom-color: #052767; font-weight: 600; }
+
+    .badge {
+        background: #e0e0e0;
+        border-radius: 999px;
+        padding: 1px 7px;
+        font-size: 0.75rem;
+        margin-left: 4px;
+    }
+
+    .tab-btn.active .badge { background: #052767; color: white; }
+
+    .card {
+        border: 1px solid #e8e8e8;
+        border-radius: 8px;
+        padding: 1rem 1.25rem;
+        margin-bottom: 0.75rem;
+        transition: box-shadow 0.2s;
+    }
+
+    .card:hover       { box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+    .card-title       { font-weight: 600; font-size: 1rem; margin-bottom: 0.35rem; }
+    .card-meta        { font-size: 0.82rem; color: #888; margin-top: 0.2rem; }
+    .card-body-text   { font-size: 0.9rem; color: #444; margin: 0.35rem 0; }
+
+    .empty-state { text-align: center; color: #aaa; padding: 2rem 0; font-style: italic; }
+    .loading     { text-align: center; color: #aaa; padding: 3rem 0; }
+</style>

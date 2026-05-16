@@ -6,6 +6,17 @@ a, .btn-link {
     color: #006bb7;
 }
 
+.username-link {
+    color: inherit;
+    text-decoration: none;
+    font-weight: inherit;
+}
+
+.username-link:hover {
+    text-decoration: underline;
+    color: #052767;
+}
+
 .btn-primary {
     color: #fff;
     background-color: #1b6ec2;

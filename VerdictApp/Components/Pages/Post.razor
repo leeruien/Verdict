@@ -95,19 +95,36 @@
 
         <!-- Image -->
         <div class="form-group">
-            <label>Image <span class="muted">(optional · max 5 MB)</span></label>
+            <label>Images <span class="muted">(optional · up to 4 · max 5 MB each)</span></label>
             <div class="file-upload-area">
-                <InputFile accept="image/*" OnChange="HandleFileSelected" class="file-input" id="fileInput" />
+                <InputFile accept="image/*" OnChange="HandleFilesSelected" class="file-input" id="fileInput" multiple />
                 <label for="fileInput" class="file-label">
-                    @if (selectedFile != null)
+                    @if (selectedImages.Count == 0)
                     {
-                        <span>📎 @selectedFile.Name (@((selectedFile.Size / 1024).ToString("N0")) KB)</span>
+                        <span>📷 Choose up to 4 images…</span>
+                    }
+                    else if (selectedImages.Count < MaxImages)
+                    {
+                        <span>📷 Add another image (@selectedImages.Count/@MaxImages)</span>
                     }
                     else
                     {
-                        <span>📷 Choose an image…</span>
+                        <span>📷 @MaxImages images selected (max reached)</span>
                     }
                 </label>
+                @if (selectedImages.Any())
+                {
+                    <div class="file-list">
+                        @foreach (var img in selectedImages)
+                        {
+                            var captured = img;
+                            <div class="file-chip">
+                                <span>@img.Name (@((img.Size / 1024).ToString("N0")) KB)</span>
+                                <button type="button" class="file-chip-remove" @onclick="() => RemoveSelectedImage(captured)">✕</button>
+                            </div>
+                        }
+                    </div>
+                }
                 @if (!string.IsNullOrEmpty(imageError))
                 {
                     <p class="image-error">@imageError</p>
@@ -142,43 +159,63 @@
     private bool isBusy = false;
     private string successMessage = "";
     private string errorMessage = "";
-    private IBrowserFile? selectedFile;
+    private record SelectedImage(string Name, long Size, string Ext, byte[] Data);
+    private List<SelectedImage> selectedImages = new();
     private string imageError = "";
 
     private static readonly string[] AllowedExtensions = { ".jpg", ".jpeg", ".png", ".gif", ".webp" };
+    private const int MaxImages = 4;
 
-    private void HandleFileSelected(InputFileChangeEventArgs e)
+    private async Task HandleFilesSelected(InputFileChangeEventArgs e)
     {
         imageError = "";
-        var file = e.File;
-        var ext = Path.GetExtension(file.Name).ToLowerInvariant();
-        if (!AllowedExtensions.Contains(ext))
+        foreach (var file in e.GetMultipleFiles(MaxImages))
         {
-            imageError = "Only image files are allowed (jpg, png, gif, webp).";
-            selectedFile = null;
-            return;
+            if (selectedImages.Count >= MaxImages)
+            {
+                imageError = $"Maximum {MaxImages} images reached.";
+                break;
+            }
+            if (selectedImages.Any(f => f.Name == file.Name && f.Size == file.Size))
+                continue;
+            var ext = Path.GetExtension(file.Name).ToLowerInvariant();
+            if (!AllowedExtensions.Contains(ext))
+            {
+                imageError = "Only image files are allowed (jpg, png, gif, webp).";
+                continue;
+            }
+            if (file.Size > 5 * 1024 * 1024)
+            {
+                imageError = "Each image must be under 5 MB.";
+                continue;
+            }
+            using var ms = new MemoryStream();
+            await file.OpenReadStream(5 * 1024 * 1024).CopyToAsync(ms);
+            selectedImages.Add(new(file.Name, file.Size, ext, ms.ToArray()));
         }
-        if (file.Size > 5 * 1024 * 1024)
-        {
-            imageError = "Image must be under 5 MB.";
-            selectedFile = null;
-            return;
-        }
-        selectedFile = file;
+        StateHasChanged();
     }
 
-    private async Task<string?> SaveImageAsync(Guid dilemmaId)
+    private void RemoveSelectedImage(SelectedImage img)
     {
-        if (selectedFile == null) return null;
-        var ext = Path.GetExtension(selectedFile.Name).ToLowerInvariant();
+        selectedImages.Remove(img);
+        imageError = "";
+    }
+
+    private async Task<List<string>> SaveImagesAsync(Guid dilemmaId)
+    {
+        var paths = new List<string>();
+        if (!selectedImages.Any()) return paths;
         var uploadsDir = Path.Combine(Env.WebRootPath, "uploads");
         Directory.CreateDirectory(uploadsDir);
-        var fileName = $"{dilemmaId}{ext}";
-        var filePath = Path.Combine(uploadsDir, fileName);
-        await using var stream = selectedFile.OpenReadStream(maxAllowedSize: 5 * 1024 * 1024);
-        await using var fileStream = File.Create(filePath);
-        await stream.CopyToAsync(fileStream);
-        return $"/uploads/{fileName}";
+        for (int i = 0; i < selectedImages.Count; i++)
+        {
+            var img = selectedImages[i];
+            var fileName = i == 0 ? $"{dilemmaId}{img.Ext}" : $"{dilemmaId}_{i}{img.Ext}";
+            await File.WriteAllBytesAsync(Path.Combine(uploadsDir, fileName), img.Data);
+            paths.Add($"/uploads/{fileName}");
+        }
+        return paths;
     }
 
     private record CategoryOption(string Value, string Label, string Icon);
@@ -266,7 +303,9 @@
             }).ToList()
         };
 
-        dilemma.ImagePath = await SaveImageAsync(dilemma.Id);
+        var imagePaths = await SaveImagesAsync(dilemma.Id);
+        if (imagePaths.Any())
+            dilemma.ImagePaths = System.Text.Json.JsonSerializer.Serialize(imagePaths);
         Db.Dilemmas.Add(dilemma);
         await Db.SaveChangesAsync();
 
@@ -507,6 +546,39 @@
     .file-label:hover { border-color: #052767; color: #052767; background: #f0f4ff; }
 
     .image-error { color: #e06c75; font-size: 0.83rem; margin: 0; }
+
+    .file-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.3rem;
+        margin-top: 0.4rem;
+    }
+
+    .file-chip {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+        background: #f0f4ff;
+        border: 1px solid #c5d5ff;
+        border-radius: 6px;
+        padding: 0.3rem 0.6rem;
+        font-size: 0.82rem;
+        color: #333;
+    }
+
+    .file-chip-remove {
+        background: none;
+        border: none;
+        color: #aaa;
+        cursor: pointer;
+        font-size: 0.8rem;
+        padding: 0;
+        flex-shrink: 0;
+        line-height: 1;
+    }
+
+    .file-chip-remove:hover { color: #e06c75; }
 
     @@media (max-width: 480px) {
         .category-grid { grid-template-columns: repeat(2, 1fr); }

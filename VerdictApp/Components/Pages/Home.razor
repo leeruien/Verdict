@@ -58,9 +58,9 @@
                 {
                     <p class="dilemma-desc">@dilemma.Description</p>
                 }
-                @if (!string.IsNullOrEmpty(dilemma.ImagePath))
+                @if (dilemma.ImagePathList.Any())
                 {
-                    <img src="@dilemma.ImagePath" alt="Post image" class="card-image" />
+                    <img src="@dilemma.ImagePathList[0]" alt="Post image" class="card-image" />
                 }
 
                 <div class="options-list">

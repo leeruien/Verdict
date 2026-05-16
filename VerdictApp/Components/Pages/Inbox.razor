@@ -65,7 +65,7 @@
                 <div class="convo-card request-card" @onclick='() => Nav.NavigateTo("/inbox/" + c.Id)'>
                     <div class="mini-avatar">@(c.Initiator.DisplayName?[0].ToString().ToUpper() ?? "?")</div>
                     <div class="convo-info">
-                        <span class="convo-name">@c.Initiator.DisplayName</span>
+                        <a class="convo-name username-link" href="/user/@c.Initiator.Id" @onclick:stopPropagation="true">@c.Initiator.DisplayName</a>
                         <span class="convo-preview">@(preview?.Body ?? "")</span>
                     </div>
                     <span class="request-badge">Pending</span>
@@ -85,7 +85,7 @@
                 <div class="convo-card" @onclick='() => Nav.NavigateTo("/inbox/" + c.Id)'>
                     <div class="mini-avatar">@(other.DisplayName?[0].ToString().ToUpper() ?? "?")</div>
                     <div class="convo-info">
-                        <span class="convo-name">@other.DisplayName</span>
+                        <a class="convo-name username-link" href="/user/@other.Id" @onclick:stopPropagation="true">@other.DisplayName</a>
                         <span class="convo-preview">@(last?.Body ?? "")</span>
                     </div>
                     <span class="convo-time">@FormatTime(last?.SentAt)</span>
@@ -104,7 +104,7 @@
                 <div class="convo-card dimmed" @onclick='() => Nav.NavigateTo("/inbox/" + c.Id)'>
                     <div class="mini-avatar">@(c.Recipient.DisplayName?[0].ToString().ToUpper() ?? "?")</div>
                     <div class="convo-info">
-                        <span class="convo-name">@c.Recipient.DisplayName</span>
+                        <a class="convo-name username-link" href="/user/@c.Recipient.Id" @onclick:stopPropagation="true">@c.Recipient.DisplayName</a>
                         <span class="convo-preview">@(preview?.Body ?? "")</span>
                     </div>
                     <span class="waiting-badge">Waiting</span>
