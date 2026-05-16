@@ -1,0 +1,228 @@
+@page "/explore"
+@rendermode InteractiveServer
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.EntityFrameworkCore
+@using VerdictApp.Data
+@using VerdictApp.Models
+@inject UserManager<ApplicationUser> UserManager
+@inject AuthenticationStateProvider AuthStateProvider
+@inject ApplicationDbContext Db
+@inject NavigationManager Nav
+
+<div class="explore-page">
+
+    <div class="explore-header">
+        <h1>Explore Communities</h1>
+        <p>Find groups that match your interests</p>
+    </div>
+
+    <input class="search-input" @bind="searchQuery" @bind:event="oninput" placeholder="Search communities…" />
+
+    <div class="communities-grid">
+        @foreach (var cat in FilteredCategories())
+        {
+            var subCount = subscriberCounts.GetValueOrDefault(cat.Value, 0);
+            var postCount = postCounts.GetValueOrDefault(cat.Value, 0);
+            var subscribed = subscribedCategories.Contains(cat.Value);
+
+            <div class="community-card" @onclick='() => Nav.NavigateTo($"/group/{cat.Value}")'>
+                <span class="community-icon">@cat.Icon</span>
+                <span class="community-name">@cat.Label</span>
+                <span class="community-stats">@subCount subscribers · @postCount posts</span>
+                @if (currentUserId != null)
+                {
+                    <button class="subscribe-btn @(subscribed ? "subscribed" : "")"
+                            @onclick:stopPropagation="true"
+                            @onclick="() => ToggleSubscribe(cat.Value)">
+                        @(subscribed ? "✓ Joined" : "+ Join")
+                    </button>
+                }
+            </div>
+        }
+    </div>
+
+    @if (!FilteredCategories().Any())
+    {
+        <p class="empty-state">No communities match "@searchQuery".</p>
+    }
+
+</div>
+
+@code {
+    private string? currentUserId;
+    private string searchQuery = "";
+    private Dictionary<string, int> subscriberCounts = new();
+    private Dictionary<string, int> postCounts = new();
+    private HashSet<string> subscribedCategories = new();
+
+    private record CategoryOption(string Value, string Label, string Icon);
+
+    private List<CategoryOption> categories = new()
+    {
+        new("life",          "Life",          "🌱"),
+        new("career",        "Career",        "💼"),
+        new("finance",       "Finance",       "💰"),
+        new("relationships", "Relationships", "❤️"),
+        new("travel",        "Travel",        "✈️"),
+        new("health",        "Health",        "🏃"),
+        new("tech",          "Tech",          "💻"),
+        new("other",         "Other",         "🤔"),
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = await UserManager.GetUserAsync(authState.User);
+        currentUserId = user?.Id;
+
+        var customCommunities = await Db.Communities.OrderBy(c => c.Name).ToListAsync();
+        foreach (var c in customCommunities)
+            categories.Add(new(c.Slug, c.Name, c.Icon));
+
+        if (currentUserId != null)
+        {
+            subscribedCategories = (await Db.CategorySubscriptions
+                .Where(s => s.UserId == currentUserId)
+                .Select(s => s.Category)
+                .ToListAsync()).ToHashSet();
+        }
+
+        subscriberCounts = await Db.CategorySubscriptions
+            .GroupBy(s => s.Category)
+            .Select(g => new { Cat = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.Cat, x => x.Count);
+
+        postCounts = await Db.Dilemmas
+            .GroupBy(d => d.Category)
+            .Select(g => new { Cat = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.Cat, x => x.Count);
+    }
+
+    private List<CategoryOption> FilteredCategories()
+    {
+        var q = searchQuery.Trim();
+        return string.IsNullOrEmpty(q)
+            ? categories
+                .OrderByDescending(c => subscriberCounts.GetValueOrDefault(c.Value, 0))
+                .ThenByDescending(c => postCounts.GetValueOrDefault(c.Value, 0))
+                .ToList()
+            : categories
+                .Where(c => c.Label.Contains(q, StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(c => subscriberCounts.GetValueOrDefault(c.Value, 0))
+                .ToList();
+    }
+
+    private async Task ToggleSubscribe(string category)
+    {
+        if (currentUserId == null) { Nav.NavigateTo("/login"); return; }
+
+        if (subscribedCategories.Contains(category))
+        {
+            var sub = await Db.CategorySubscriptions
+                .FirstOrDefaultAsync(s => s.UserId == currentUserId && s.Category == category);
+            if (sub != null) Db.CategorySubscriptions.Remove(sub);
+            subscribedCategories.Remove(category);
+            subscriberCounts[category] = subscriberCounts.GetValueOrDefault(category, 1) - 1;
+        }
+        else
+        {
+            Db.CategorySubscriptions.Add(new CategorySubscription
+            {
+                Id = Guid.NewGuid(),
+                UserId = currentUserId,
+                Category = category,
+                SubscribedAt = DateTime.UtcNow
+            });
+            subscribedCategories.Add(category);
+            subscriberCounts[category] = subscriberCounts.GetValueOrDefault(category, 0) + 1;
+        }
+
+        await Db.SaveChangesAsync();
+        StateHasChanged();
+    }
+}
+
+<style>
+    .explore-page {
+        max-width: 760px;
+        margin: 2rem auto;
+        padding: 0 1rem;
+        font-family: Georgia, serif;
+    }
+
+    .explore-header {
+        margin-bottom: 1.5rem;
+    }
+
+    .explore-header h1 { font-size: 1.8rem; margin: 0; }
+    .explore-header p  { color: #888; margin: 0.25rem 0 0; }
+
+    .search-input {
+        width: 100%;
+        padding: 0.6rem 1rem;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        font-size: 0.95rem;
+        font-family: Georgia, serif;
+        box-sizing: border-box;
+        margin-bottom: 1.5rem;
+        transition: border-color 0.2s;
+        outline: none;
+    }
+
+    .search-input:focus { border-color: #052767; }
+
+    .communities-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+        gap: 0.75rem;
+    }
+
+    .community-card {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.25rem;
+        padding: 1.1rem 0.75rem 0.85rem;
+        border: 1px solid #e8e8e8;
+        border-radius: 12px;
+        background: white;
+        cursor: pointer;
+        text-align: center;
+        transition: all 0.15s;
+    }
+
+    .community-card:hover { border-color: #052767; background: #f0f4ff; box-shadow: 0 2px 10px rgba(0,0,0,0.07); }
+
+    .community-icon  { font-size: 2rem; line-height: 1; margin-bottom: 0.15rem; }
+    .community-name  { font-size: 0.88rem; font-weight: 600; color: #222; }
+    .community-stats { font-size: 0.72rem; color: #aaa; }
+
+    .subscribe-btn {
+        margin-top: 0.5rem;
+        padding: 0.3rem 0.9rem;
+        border-radius: 20px;
+        border: 1.5px solid #052767;
+        background: white;
+        color: #052767;
+        font-size: 0.78rem;
+        font-weight: 600;
+        cursor: pointer;
+        font-family: Georgia, serif;
+        transition: all 0.15s;
+    }
+
+    .subscribe-btn:hover     { background: #f0f4ff; }
+    .subscribe-btn.subscribed { background: #052767; color: white; border-color: #052767; }
+
+    .empty-state {
+        text-align: center;
+        color: #aaa;
+        padding: 3rem 0;
+        font-style: italic;
+    }
+
+    @@media (max-width: 480px) {
+        .communities-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+</style>

@@ -17,37 +17,6 @@
         <p>Help others decide — vote on their dilemmas</p>
     </div>
 
-    <div class="communities-section">
-        <h2 class="communities-title">Communities</h2>
-        <div class="communities-grid">
-            @foreach (var cat in SortedCategories().Take(communityDisplayCount))
-            {
-                var subCount = subscriberCounts.GetValueOrDefault(cat.Value, 0);
-                var postCount = postCounts.GetValueOrDefault(cat.Value, 0);
-                var subscribed = subscribedCategories.Contains(cat.Value);
-                <div class="community-card" @onclick='() => Nav.NavigateTo($"/group/{cat.Value}")'>
-                    <span class="community-icon">@cat.Icon</span>
-                    <span class="community-name">@cat.Label</span>
-                    <span class="community-stats">@subCount subscribers · @postCount posts</span>
-                    @if (subscribed)
-                    {
-                        <span class="subscribed-badge">✓</span>
-                    }
-                </div>
-            }
-        </div>
-        <div class="see-more-row">
-            @if (communityDisplayCount < categories.Count)
-            {
-                <button class="see-more-btn" @onclick="ShowMoreCommunities">See more</button>
-            }
-            @if (communityDisplayCount > 4)
-            {
-                <button class="see-more-btn" @onclick="() => communityDisplayCount = 4">See less</button>
-            }
-        </div>
-    </div>
-
     @if (dilemmas == null)
     {
         <p class="loading">Loading dilemmas...</p>
@@ -142,24 +111,7 @@
     private List<Dilemma>? dilemmas;
     private string? currentUserId;
     private HashSet<Guid> userVotedOptionIds = new();
-    private Dictionary<string, int> subscriberCounts = new();
-    private Dictionary<string, int> postCounts = new();
-    private HashSet<string> subscribedCategories = new();
-    private int communityDisplayCount = 4;
 
-    private record CategoryOption(string Value, string Label, string Icon, bool IsCustom = false);
-
-    private List<CategoryOption> categories = new()
-    {
-        new("life",          "Life",          "🌱"),
-        new("career",        "Career",        "💼"),
-        new("finance",       "Finance",       "💰"),
-        new("relationships", "Relationships", "❤️"),
-        new("travel",        "Travel",        "✈️"),
-        new("health",        "Health",        "🏃"),
-        new("tech",          "Tech",          "💻"),
-        new("other",         "Other",         "🤔"),
-    };
 
     protected override async Task OnInitializedAsync()
     {
@@ -174,26 +126,7 @@
                 .Select(v => v.DilemmaOptionId)
                 .ToListAsync();
             userVotedOptionIds = myVotes.ToHashSet();
-
-            subscribedCategories = (await Db.CategorySubscriptions
-                .Where(s => s.UserId == currentUserId)
-                .Select(s => s.Category)
-                .ToListAsync()).ToHashSet();
         }
-
-        subscriberCounts = await Db.CategorySubscriptions
-            .GroupBy(s => s.Category)
-            .Select(g => new { Cat = g.Key, Count = g.Count() })
-            .ToDictionaryAsync(x => x.Cat, x => x.Count);
-
-        postCounts = await Db.Dilemmas
-            .GroupBy(d => d.Category)
-            .Select(g => new { Cat = g.Key, Count = g.Count() })
-            .ToDictionaryAsync(x => x.Cat, x => x.Count);
-
-        var customCommunities = await Db.Communities.OrderBy(c => c.Name).ToListAsync();
-        foreach (var c in customCommunities)
-            categories.Add(new(c.Slug, c.Name, c.Icon, true));
 
         await LoadDilemmas();
     }
@@ -233,15 +166,6 @@
         StateHasChanged();
     }
 
-    private List<CategoryOption> SortedCategories() =>
-        categories
-            .OrderByDescending(c => subscriberCounts.GetValueOrDefault(c.Value, 0))
-            .ThenByDescending(c => postCounts.GetValueOrDefault(c.Value, 0))
-            .ToList();
-
-    private void ShowMoreCommunities() =>
-        communityDisplayCount = Math.Min(communityDisplayCount + 4, categories.Count);
-
     private bool HasVotedOnDilemma(Dilemma dilemma) =>
         dilemma.Options.Any(o => userVotedOptionIds.Contains(o.Id));
 
@@ -258,8 +182,15 @@
         return $"{(int)diff.TotalDays}d left";
     }
 
+    private static readonly Dictionary<string, string> CategoryIcons = new()
+    {
+        ["life"] = "🌱", ["career"] = "💼", ["finance"] = "💰",
+        ["relationships"] = "❤️", ["travel"] = "✈️", ["health"] = "🏃",
+        ["tech"] = "💻", ["other"] = "🤔",
+    };
+
     private string GetCategoryIcon(string? category) =>
-        categories.FirstOrDefault(c => c.Value == category)?.Icon ?? "🤔";
+        category != null && CategoryIcons.TryGetValue(category, out var icon) ? icon : "🤔";
 }
 
 <style>
@@ -277,71 +208,6 @@
 
     .home-header h1 { font-size: 2rem; margin: 0; }
     .home-header p  { color: #888; margin: 0.25rem 0 0; }
-
-    .communities-section { margin-bottom: 2rem; }
-
-    .communities-title {
-        font-size: 1rem;
-        font-weight: 700;
-        color: #555;
-        margin: 0 0 0.75rem;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-    }
-
-    .communities-grid {
-        display: grid;
-        grid-template-columns: repeat(4, 1fr);
-        gap: 0.5rem;
-    }
-
-    .community-card {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 0.2rem;
-        padding: 0.75rem 0.5rem;
-        border: 1px solid #e8e8e8;
-        border-radius: 10px;
-        background: white;
-        cursor: pointer;
-        text-align: center;
-        transition: all 0.15s;
-        position: relative;
-    }
-
-    .community-card:hover { border-color: #052767; background: #f0f4ff; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
-
-    .community-icon  { font-size: 1.6rem; line-height: 1; }
-    .community-name  { font-size: 0.82rem; font-weight: 600; color: #222; }
-    .community-stats { font-size: 0.7rem; color: #aaa; }
-
-    .subscribed-badge {
-        position: absolute;
-        top: 6px;
-        right: 8px;
-        font-size: 0.7rem;
-        color: #052767;
-        font-weight: 700;
-    }
-
-    .see-more-btn {
-        display: block;
-        margin: 0.6rem auto 0;
-        background: none;
-        border: none;
-        color: #052767;
-        font-size: 0.82rem;
-        cursor: pointer;
-        padding: 0.25rem 0.5rem;
-        font-family: Georgia, serif;
-    }
-
-    .see-more-btn:hover { text-decoration: underline; }
-
-    @@media (max-width: 480px) {
-        .communities-grid { grid-template-columns: repeat(2, 1fr); }
-    }
 
     .dilemma-card {
         border: 1px solid #e8e8e8;

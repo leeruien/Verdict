@@ -8,6 +8,7 @@ public class Comment {
     public Guid DilemmaId { get; set; }
     public string Body { get; set; }
     public DateTime CreatedAt { get; set; }
+    public DateTime? EditedAt { get; set; }
     public ApplicationUser User { get; set; }
     public Dilemma Dilemma { get; set; }
     public Guid? ParentCommentId {get;set;}

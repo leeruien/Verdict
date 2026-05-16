@@ -211,11 +211,29 @@
 .cf-cancel { background: rgba(255,255,255,0.15); color: white; }
 .cf-cancel:hover { background: rgba(255,255,255,0.25); }
 
+.sidebar-nav {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+}
+
 .nav-scrollable {
     display: none;
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+.nav-bottom {
+    display: none;
+    flex-shrink: 0;
 }
 
 .navbar-toggler:checked ~ .nav-scrollable {
+    display: block;
+}
+
+.navbar-toggler:checked ~ .nav-bottom {
     display: block;
 }
 
@@ -230,9 +248,11 @@
     }
 
     .nav-scrollable {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .nav-bottom {
         display: block;
-        height: calc(100vh - 3.5rem);
-        overflow-y: auto;
-        overflow-x: hidden;
     }
 }

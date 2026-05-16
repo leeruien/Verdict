@@ -209,17 +209,58 @@ else
                                         <span class="vote-badge @css">@label</span>
                                     }
                                 </div>
-                                <span class="comment-date">@comment.CreatedAt.ToString("MMM d, yyyy · h:mm tt")</span>
+                                <span class="comment-date">
+                                    @comment.CreatedAt.ToLocalTime().ToString("MMM d, yyyy · h:mm tt")
+                                    @if (comment.EditedAt.HasValue)
+                                    {
+                                        <span class="edited-label">(edited @comment.EditedAt.Value.ToLocalTime().ToString("MMM d, yyyy · h:mm tt"))</span>
+                                    }
+                                </span>
                             </div>
                         </div>
-                        <p class="comment-body">@comment.Body</p>
-
-                        @if (currentUserId != null && !IsExpired())
+                        @if (editingCommentId == comment.Id)
                         {
-                            <button class="reply-btn" @onclick="() => ToggleCommentReply(comment.Id)">
-                                ↩ Reply
-                            </button>
+                            <div class="inline-reply-form">
+                                <textarea @bind="editingCommentBody" @bind:event="oninput"
+                                          class="comment-input"
+                                          rows="2"></textarea>
+                                <div class="inline-reply-actions">
+                                    <button class="comment-submit-btn"
+                                            @onclick="() => SaveCommentEdit(comment.Id, editingCommentBody)"
+                                            disabled="@(isBusy || string.IsNullOrWhiteSpace(editingCommentBody))">
+                                        Save
+                                    </button>
+                                    <button class="inline-cancel-btn" @onclick="CancelEditComment">Cancel</button>
+                                </div>
+                            </div>
                         }
+                        else
+                        {
+                            <p class="comment-body">@comment.Body</p>
+                        }
+
+                        @if (confirmDeleteCommentId == comment.Id)
+                        {
+                            <div class="confirm-bar danger">
+                                <span>Delete this comment?</span>
+                                <button class="confirm-yes danger" @onclick="() => DeleteCommentWithReplies(comment.Id)" disabled="@isBusy">Delete</button>
+                                <button class="confirm-no" @onclick="() => confirmDeleteCommentId = null">Cancel</button>
+                            </div>
+                        }
+
+                        <div class="reply-action-row">
+                            @if (currentUserId != null && !IsExpired())
+                            {
+                                <button class="reply-btn" @onclick="() => ToggleCommentReply(comment.Id)">
+                                    ↩ Reply
+                                </button>
+                            }
+                            @if (comment.UserId == currentUserId)
+                            {
+                                <button class="comment-action-btn" @onclick="() => StartEditComment(comment.Id, comment.Body)">✏️ Edit</button>
+                                <button class="comment-action-btn danger" @onclick="() => { confirmDeleteCommentId = comment.Id; editingCommentId = null; }">🗑️ Delete</button>
+                            }
+                        </div>
 
                         @if (activeCommentReplyId == comment.Id)
                         {
@@ -244,6 +285,8 @@ else
                                      CurrentUserId="@currentUserId"
                                      IsExpiredVal="@IsExpired()"
                                      OnPostReply="@PostReplyInline"
+                                     OnDeleteComment="@DeleteCommentWithReplies"
+                                     OnEditComment="@SaveCommentEdit"
                                      GetVoteBadgeFunc="@GetVoteBadge" />
                     </div>
                 }
@@ -278,6 +321,11 @@ else
     // Voter change/remove state
     private bool isChangingVote = false;
     private bool showRemoveVoteConfirm = false;
+
+    // Comment edit/delete state
+    private Guid? editingCommentId;
+    private string editingCommentBody = "";
+    private Guid? confirmDeleteCommentId;
 
     private record CategoryOption(string Value, string Label, string Icon);
     private List<CategoryOption> categories = new()
@@ -542,6 +590,60 @@ else
         replyingToCommentId = null;
         replyingToUsername = "";
         newComment = "";
+    }
+
+    private void StartEditComment(Guid commentId, string body)
+    {
+        editingCommentId = commentId;
+        editingCommentBody = body;
+        confirmDeleteCommentId = null;
+        activeCommentReplyId = null;
+    }
+
+    private void CancelEditComment()
+    {
+        editingCommentId = null;
+        editingCommentBody = "";
+    }
+
+    private async Task SaveCommentEdit(Guid commentId, string newBody)
+    {
+        var entry = await Db.Comments.FindAsync(commentId);
+        if (entry != null && entry.UserId == currentUserId)
+        {
+            entry.Body = newBody.Trim();
+            entry.EditedAt = DateTime.UtcNow;
+            await Db.SaveChangesAsync();
+        }
+        editingCommentId = null;
+        editingCommentBody = "";
+        await LoadDilemma();
+        StateHasChanged();
+    }
+
+    private async Task DeleteCommentWithReplies(Guid commentId)
+    {
+        var allComments = dilemma!.Comments.ToList();
+        var toDelete = CollectDescendants(allComments, commentId);
+        var target = allComments.FirstOrDefault(c => c.Id == commentId);
+        if (target != null && target.UserId == currentUserId)
+            toDelete.Add(target);
+        Db.Comments.RemoveRange(toDelete);
+        await Db.SaveChangesAsync();
+        confirmDeleteCommentId = null;
+        await LoadDilemma();
+        StateHasChanged();
+    }
+
+    private List<Comment> CollectDescendants(List<Comment> all, Guid parentId)
+    {
+        var result = new List<Comment>();
+        foreach (var child in all.Where(c => c.ParentCommentId == parentId))
+        {
+            result.Add(child);
+            result.AddRange(CollectDescendants(all, child.Id));
+        }
+        return result;
     }
 
     private (string label, string css) GetVoteBadge(string? userId)
@@ -1050,4 +1152,25 @@ else
     .confirm-yes:disabled       { background: #aaa; cursor: not-allowed; }
     .confirm-no         { background: #f3f4f6; color: #555; }
     .confirm-no:hover   { background: #e5e7eb; }
+
+    .comment-action-btn {
+        background: none;
+        border: none;
+        color: #aaa;
+        font-size: 0.78rem;
+        cursor: pointer;
+        padding: 0.25rem 0;
+        font-family: Georgia, serif;
+        transition: color 0.15s;
+    }
+
+    .comment-action-btn:hover        { color: #052767; }
+    .comment-action-btn.danger:hover { color: #dc2626; }
+
+    .edited-label {
+        font-size: 0.72rem;
+        color: #bbb;
+        font-style: italic;
+        margin-left: 0.3rem;
+    }
 </style>

@@ -29,14 +29,55 @@
                                 }
                             }
                         </div>
-                        <span class="comment-date">@reply.CreatedAt.ToString("MMM d, yyyy · h:mm tt")</span>
+                        <span class="comment-date">
+                            @reply.CreatedAt.ToLocalTime().ToString("MMM d, yyyy · h:mm tt")
+                            @if (reply.EditedAt.HasValue)
+                            {
+                                <span class="edited-label">(edited @reply.EditedAt.Value.ToLocalTime().ToString("MMM d, yyyy · h:mm tt"))</span>
+                            }
+                        </span>
                     </div>
                 </div>
-                <p class="comment-body">@reply.Body</p>
+
+                @if (editingReplyId == reply.Id)
+                {
+                    <div class="inline-reply-form">
+                        <textarea @bind="editingReplyBody" @bind:event="oninput"
+                                  class="comment-input"
+                                  rows="2"></textarea>
+                        <div class="inline-reply-actions">
+                            <button class="comment-submit-btn"
+                                    @onclick="() => SaveEditReply(reply.Id)"
+                                    disabled="@string.IsNullOrWhiteSpace(editingReplyBody)">
+                                Save
+                            </button>
+                            <button class="inline-cancel-btn" @onclick="CancelEditReply">Cancel</button>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <p class="comment-body">@reply.Body</p>
+                }
+
+                @if (confirmDeleteReplyId == reply.Id)
+                {
+                    <div class="confirm-bar danger">
+                        <span>Delete this reply?</span>
+                        <button class="confirm-yes danger" @onclick="() => ConfirmDeleteReply(reply.Id)">Delete</button>
+                        <button class="confirm-no" @onclick="() => confirmDeleteReplyId = null">Cancel</button>
+                    </div>
+                }
+
                 <div class="reply-action-row">
                     @if (CurrentUserId != null && !IsExpiredVal)
                     {
                         <button class="reply-btn" @onclick="() => ToggleInlineReply(reply.Id)">↩ Reply</button>
+                    }
+                    @if (reply.UserId == CurrentUserId)
+                    {
+                        <button class="comment-action-btn" @onclick="() => StartEditReply(reply.Id, reply.Body)">✏️ Edit</button>
+                        <button class="comment-action-btn danger" @onclick="() => { confirmDeleteReplyId = reply.Id; editingReplyId = null; }">🗑️ Delete</button>
                     }
                     @if (childCount > 3 && !expandedThreads.Contains(reply.Id) && !ForceExpanded)
                     {
@@ -73,6 +114,8 @@
                              IsExpiredVal="IsExpiredVal"
                              ForceExpanded="@(ForceExpanded || expandedThreads.Contains(reply.Id))"
                              OnPostReply="OnPostReply"
+                             OnDeleteComment="OnDeleteComment"
+                             OnEditComment="OnEditComment"
                              GetVoteBadgeFunc="GetVoteBadgeFunc" />
             }
 
@@ -93,12 +136,49 @@
     [Parameter] public bool IsExpiredVal { get; set; }
     [Parameter] public bool ForceExpanded { get; set; }
     [Parameter] public Func<Guid, string, Task>? OnPostReply { get; set; }
+    [Parameter] public Func<Guid, Task>? OnDeleteComment { get; set; }
+    [Parameter] public Func<Guid, string, Task>? OnEditComment { get; set; }
     [Parameter] public Func<string?, (string, string)>? GetVoteBadgeFunc { get; set; }
 
     private Guid? activeInlineReplyId;
     private string inlineText = "";
     private bool isPosting;
     private HashSet<Guid> expandedThreads = new();
+
+    private Guid? editingReplyId;
+    private string editingReplyBody = "";
+    private Guid? confirmDeleteReplyId;
+
+    private void StartEditReply(Guid replyId, string body)
+    {
+        editingReplyId = replyId;
+        editingReplyBody = body;
+        confirmDeleteReplyId = null;
+        activeInlineReplyId = null;
+        StateHasChanged();
+    }
+
+    private void CancelEditReply()
+    {
+        editingReplyId = null;
+        editingReplyBody = "";
+        StateHasChanged();
+    }
+
+    private async Task SaveEditReply(Guid replyId)
+    {
+        if (OnEditComment == null || string.IsNullOrWhiteSpace(editingReplyBody)) return;
+        await OnEditComment(replyId, editingReplyBody.Trim());
+        editingReplyId = null;
+        editingReplyBody = "";
+    }
+
+    private async Task ConfirmDeleteReply(Guid replyId)
+    {
+        if (OnDeleteComment == null) return;
+        await OnDeleteComment(replyId);
+        confirmDeleteReplyId = null;
+    }
 
     private List<Comment> Replies => AllComments
         .Where(c => c.ParentCommentId == ParentId)
