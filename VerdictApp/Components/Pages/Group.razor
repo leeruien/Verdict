@@ -47,17 +47,29 @@ else
             }
         </div>
 
+        <div class="search-bar">
+            <input class="group-search" type="search" placeholder="Search posts…"
+                   @bind="searchQuery" @bind:event="oninput" />
+        </div>
+
         @if (dilemmas == null)
         {
             <p class="loading">Loading...</p>
         }
-        else if (!dilemmas.Any())
+        else if (!FilteredDilemmas.Any())
         {
-            <p class="empty-state">No dilemmas in this group yet. <a href="/post">Post one!</a></p>
+            @if (!string.IsNullOrWhiteSpace(searchQuery))
+            {
+                <p class="empty-state">No posts match "<strong>@searchQuery</strong>".</p>
+            }
+            else
+            {
+                <p class="empty-state">No dilemmas in this group yet. <a href="/post">Post one!</a></p>
+            }
         }
         else
         {
-            @foreach (var dilemma in dilemmas)
+            @foreach (var dilemma in FilteredDilemmas)
             {
                 var totalVotes = dilemma.Options.Sum(o => o.Votes.Count);
                 var isOwner = dilemma.UserId == currentUserId;
@@ -130,6 +142,12 @@ else
     [Parameter] public string Category { get; set; } = "";
 
     private List<Dilemma>? dilemmas;
+    private string searchQuery = "";
+    private IEnumerable<Dilemma> FilteredDilemmas => dilemmas == null ? [] :
+        string.IsNullOrWhiteSpace(searchQuery) ? dilemmas :
+        dilemmas.Where(d =>
+            d.Title.Contains(searchQuery, StringComparison.OrdinalIgnoreCase) ||
+            (d.Description ?? "").Contains(searchQuery, StringComparison.OrdinalIgnoreCase));
     private string? currentUserId;
     private HashSet<Guid> userVotedOptionIds = new();
     private int subscriberCount;
@@ -368,6 +386,29 @@ else
     .dilemma-footer { display: flex; gap: 1rem; font-size: 0.8rem; color: #aaa; margin-top: 0.5rem; }
     .expired-tag    { margin-left: auto; color: #e06c75; font-weight: 600; }
 
+    .search-bar {
+        margin-bottom: 1.25rem;
+    }
+
+    .group-search {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 0.55rem 1rem;
+        border: 1px solid #ddd;
+        border-radius: 20px;
+        font-size: 0.9rem;
+        font-family: Georgia, serif;
+        background: #fafafa;
+        transition: border-color 0.15s, background 0.15s;
+    }
+
+    .group-search:focus {
+        outline: none;
+        border-color: #052767;
+        background: #fff;
+    }
+
     .loading, .empty-state { text-align: center; color: #aaa; padding: 3rem 0; font-style: italic; }
     .empty-state a { color: #052767; }
+    .empty-state strong { color: #555; font-style: normal; }
 </style>
