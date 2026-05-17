@@ -173,7 +173,7 @@
         ["following"] = "Following",
         ["popular"]   = "Popular",
         ["top"]       = "Top",
-        ["hot"]       = "🔥 Hot",
+        ["hot"]       = "Hot",
     };
 
     protected override async Task OnInitializedAsync()
@@ -201,6 +201,10 @@
                 .ToListAsync();
             reportedDilemmaIds = myReports.ToHashSet();
         }
+
+        var customCommunities = await Db.Communities.ToListAsync();
+        foreach (var c in customCommunities)
+            CategoryIcons.TryAdd(c.Slug, c.Icon);
 
         await LoadDilemmas();
     }
@@ -319,7 +323,7 @@
         return $"{(int)diff.TotalDays}d left";
     }
 
-    private static readonly Dictionary<string, string> CategoryIcons = new()
+    private Dictionary<string, string> CategoryIcons = new()
     {
         ["life"] = "🌱", ["career"] = "💼", ["finance"] = "💰",
         ["relationships"] = "❤️", ["travel"] = "✈️", ["health"] = "🏃",
