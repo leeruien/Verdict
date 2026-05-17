@@ -9,6 +9,7 @@
 @inject AuthenticationStateProvider AuthStateProvider
 @inject ApplicationDbContext Db
 @inject NavigationManager Nav
+@inject VerdictApp.Services.BadgeNotifier BadgeNotifier
 @attribute [Authorize]
 
 <PageTitle>Notifications</PageTitle>
@@ -69,6 +70,7 @@
         {
             n.IsRead = true;
             await Db.SaveChangesAsync();
+            await BadgeNotifier.NotifyAsync();
         }
         if (n.DilemmaId.HasValue)
             Nav.NavigateTo($"/dilemma/{n.DilemmaId}");
@@ -79,6 +81,7 @@
         foreach (var n in notifications.Where(n => !n.IsRead))
             n.IsRead = true;
         await Db.SaveChangesAsync();
+        await BadgeNotifier.NotifyAsync();
         StateHasChanged();
     }
 

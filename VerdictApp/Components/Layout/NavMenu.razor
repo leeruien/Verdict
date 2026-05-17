@@ -10,6 +10,7 @@
 @inject NavigationManager Nav
 @inject IJSRuntime JS
 @inject VerdictApp.Services.RecentGroupsNotifier RecentNotifier
+@inject VerdictApp.Services.BadgeNotifier BadgeNotifier
 @implements IDisposable
 
 <div class="sidebar-nav">
@@ -197,6 +198,7 @@
         if (!firstRender) return;
         recentGroups = await JS.InvokeAsync<RecentGroup[]>("getRecentGroups");
         RecentNotifier.OnGroupVisited += HandleGroupVisited;
+        BadgeNotifier.OnCountsChanged += RefreshCounts;
         StateHasChanged();
     }
 
@@ -209,9 +211,30 @@
         });
     }
 
+    private async Task RefreshCounts()
+    {
+        await InvokeAsync(async () =>
+        {
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var userId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (userId == null) return;
+
+            await using var scope = ScopeFactory.CreateAsyncScope();
+            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+            notifCount = await db.Notifications
+                .CountAsync(n => n.RecipientUserId == userId && !n.IsRead);
+            inboxCount = await db.Conversations
+                .CountAsync(c => c.RecipientId == userId && c.Status == ConversationStatus.Pending);
+
+            StateHasChanged();
+        });
+    }
+
     public void Dispose()
     {
         RecentNotifier.OnGroupVisited -= HandleGroupVisited;
+        BadgeNotifier.OnCountsChanged -= RefreshCounts;
     }
 
     private async Task CreateCommunity()
