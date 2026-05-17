@@ -88,7 +88,8 @@ else
                           @bind="newMessage"
                           @bind:event="oninput"
                           @onkeydown="HandleKey"></textarea>
-                <button class="chat-send-btn" @onclick="SendMessage"
+                <button class="chat-send-btn @(!string.IsNullOrWhiteSpace(newMessage) ? "has-text" : "")"
+                        @onclick="SendMessage"
                         disabled="@(isBusy || string.IsNullOrWhiteSpace(newMessage))">
                     Send
                 </button>
@@ -353,7 +354,9 @@ else
         white-space: nowrap;
     }
 
-    .chat-send-btn:hover:not(:disabled) { background: #3a0647; }
+    .chat-send-btn.has-text { background: #6b21a8; }
+    .chat-send-btn.has-text:hover { background: #581c87; }
+    .chat-send-btn:hover:not(:disabled):not(.has-text) { background: #3a0647; }
     .chat-send-btn:disabled { background: #aaa; cursor: not-allowed; }
 
     .loading { text-align: center; color: #aaa; padding: 3rem 0; font-style: italic; }

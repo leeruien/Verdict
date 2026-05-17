@@ -562,8 +562,10 @@ else
 
         if (isChangingVote)
         {
-            // Remove existing vote first
-            var oldOptionId = userVotedOptionIds.FirstOrDefault();
+            // Find the voted option that belongs to THIS dilemma (not any other)
+            var oldOptionId = dilemma!.Options
+                .Select(o => o.Id)
+                .FirstOrDefault(id => userVotedOptionIds.Contains(id));
             if (oldOptionId != Guid.Empty)
             {
                 var oldVote = await Db.Votes.FirstOrDefaultAsync(v => v.UserId == currentUserId && v.DilemmaOptionId == oldOptionId);
@@ -659,7 +661,10 @@ else
     private async Task RemoveVote()
     {
         if (currentUserId == null || dilemma == null) return;
-        var oldOptionId = userVotedOptionIds.FirstOrDefault();
+        // Scope the lookup to options that belong to THIS dilemma only
+        var oldOptionId = dilemma.Options
+            .Select(o => o.Id)
+            .FirstOrDefault(id => userVotedOptionIds.Contains(id));
         if (oldOptionId != Guid.Empty)
         {
             var vote = await Db.Votes.FirstOrDefaultAsync(v => v.UserId == currentUserId && v.DilemmaOptionId == oldOptionId);

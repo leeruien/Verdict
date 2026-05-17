@@ -45,7 +45,8 @@
                 </div>
                 <textarea class="msg-input" rows="3" placeholder="Write your message…"
                           @bind="composeBody"></textarea>
-                <button class="send-btn" @onclick="SendRequest"
+                <button class="send-btn @(!string.IsNullOrWhiteSpace(composeBody) ? "has-text" : "")"
+                        @onclick="SendRequest"
                         disabled="@(string.IsNullOrWhiteSpace(composeBody))">Send Request</button>
                 @if (!string.IsNullOrEmpty(composeError))
                 {
@@ -327,7 +328,9 @@
     }
 
     .send-btn:disabled { background: #aaa; cursor: not-allowed; }
-    .send-btn:hover:not(:disabled) { background: #3a0647; }
+    .send-btn.has-text { background: #6b21a8; }
+    .send-btn.has-text:hover { background: #581c87; }
+    .send-btn:hover:not(:disabled):not(.has-text) { background: #3a0647; }
 
     .error-msg { color: #c0392b; font-size: 0.83rem; margin: 0; }
 

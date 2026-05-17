@@ -56,7 +56,7 @@ else
                 }
                 else
                 {
-                    <button class="message-btn" @onclick="() => showCompose = true">✉️ Message</button>
+                    <button class="message-btn" @onclick="HandleMessageClick">✉️ Message</button>
                 }
             }
             else if (currentUserId == UserId)
@@ -148,6 +148,18 @@ else
             .Include(c => c.Dilemma)
             .OrderByDescending(c => c.CreatedAt)
             .ToListAsync();
+    }
+
+    private async Task HandleMessageClick()
+    {
+        if (currentUserId == null) return;
+        var existing = await Db.Conversations.FirstOrDefaultAsync(c =>
+            (c.InitiatorId == currentUserId && c.RecipientId == UserId) ||
+            (c.InitiatorId == UserId        && c.RecipientId == currentUserId));
+        if (existing != null)
+            Nav.NavigateTo($"/inbox/{existing.Id}");
+        else
+            showCompose = true;
     }
 
     private async Task SendMessage()
