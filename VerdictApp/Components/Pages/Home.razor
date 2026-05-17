@@ -1,4 +1,4 @@
-﻿@page "/"
+@page "/"
 @rendermode InteractiveServer
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Identity
@@ -17,13 +17,36 @@
         <p>Help others decide — vote on their dilemmas</p>
     </div>
 
-    @if (dilemmas == null)
+    <div class="filter-bar">
+        @foreach (var f in Filters)
+        {
+            <button class="filter-btn @(activeFilter == f.Key ? "active" : "")"
+                    @onclick="() => SetFilter(f.Key)">
+                @f.Value
+            </button>
+        }
+    </div>
+
+    @if (activeFilter == "following" && currentUserId == null)
+    {
+        <p class="empty-state"><a href="/login">Log in</a> to see posts from communities you follow.</p>
+    }
+    else if (dilemmas == null)
     {
         <p class="loading">Loading dilemmas...</p>
     }
     else if (!dilemmas.Any())
     {
-        <p class="empty-state">No dilemmas yet. <a href="/post">Be the first to post one!</a></p>
+        <p class="empty-state">
+            @if (activeFilter == "following")
+            {
+                @:No posts from your subscribed communities yet. <a href="/explore">Explore communities</a>
+            }
+            else
+            {
+                @:No dilemmas yet. <a href="/post">Be the first to post one!</a>
+            }
+        </p>
     }
     else
     {
@@ -52,7 +75,6 @@
                     @onclick='() => Nav.NavigateTo($"/dilemma/{dilemma.Id}")'>
                     @dilemma.Title
                 </h2>
-                @* <span class="post-author">@(dilemma.User?.DisplayName ?? dilemma.User?.UserName ?? "Unknown")</span> *@
 
                 @if (!string.IsNullOrWhiteSpace(dilemma.Description))
                 {
@@ -111,7 +133,17 @@
     private List<Dilemma>? dilemmas;
     private string? currentUserId;
     private HashSet<Guid> userVotedOptionIds = new();
+    private List<string> subscribedCategories = new();
+    private string activeFilter = "all";
 
+    private static readonly Dictionary<string, string> Filters = new()
+    {
+        ["all"]       = "All",
+        ["following"] = "Following",
+        ["popular"]   = "Popular",
+        ["top"]       = "Top",
+        ["hot"]       = "🔥 Hot",
+    };
 
     protected override async Task OnInitializedAsync()
     {
@@ -126,19 +158,68 @@
                 .Select(v => v.DilemmaOptionId)
                 .ToListAsync();
             userVotedOptionIds = myVotes.ToHashSet();
+
+            subscribedCategories = await Db.CategorySubscriptions
+                .Where(s => s.UserId == currentUserId)
+                .Select(s => s.Category)
+                .ToListAsync();
         }
 
         await LoadDilemmas();
     }
 
+    private async Task SetFilter(string filter)
+    {
+        activeFilter = filter;
+        await LoadDilemmas();
+    }
+
     private async Task LoadDilemmas()
     {
-        dilemmas = await Db.Dilemmas
+        var query = Db.Dilemmas
             .Include(d => d.User)
             .Include(d => d.Options).ThenInclude(o => o.Votes)
             .Include(d => d.Comments)
-            .OrderByDescending(d => d.CreatedAt)
-            .ToListAsync();
+            .AsQueryable();
+
+        switch (activeFilter)
+        {
+            case "following":
+                if (currentUserId == null) { dilemmas = new(); return; }
+                dilemmas = await query
+                    .Where(d => subscribedCategories.Contains(d.Category))
+                    .OrderByDescending(d => d.CreatedAt)
+                    .ToListAsync();
+                break;
+
+            case "popular":
+                // All-time most voted — sorted in memory after fetch
+                var all = await query.ToListAsync();
+                dilemmas = all.OrderByDescending(d => d.Options.Sum(o => o.Votes.Count)).ToList();
+                break;
+
+            case "top":
+                // Most voted in the last 7 days
+                var cutoff = DateTime.UtcNow.AddDays(-7);
+                var recent = await query.Where(d => d.CreatedAt >= cutoff).ToListAsync();
+                dilemmas = recent.OrderByDescending(d => d.Options.Sum(o => o.Votes.Count)).ToList();
+                break;
+
+            case "hot":
+                // Vote velocity: votes / (age_hours + 2)^1.5  (Reddit-style decay)
+                var hotAll = await query.ToListAsync();
+                dilemmas = hotAll.OrderByDescending(d =>
+                {
+                    var votes = d.Options.Sum(o => o.Votes.Count);
+                    var ageHours = (DateTime.UtcNow - d.CreatedAt).TotalHours;
+                    return votes / Math.Pow(ageHours + 2, 1.5);
+                }).ToList();
+                break;
+
+            default: // "all" — newest first
+                dilemmas = await query.OrderByDescending(d => d.CreatedAt).ToListAsync();
+                break;
+        }
     }
 
     private async Task CastVote(Dilemma dilemma, DilemmaOption option)
@@ -158,8 +239,6 @@
         Db.Votes.Add(vote);
         await Db.SaveChangesAsync();
 
-        @* userVotedOptionIds.Add(option.Id);
-        option.Votes.Add(vote); *@
         userVotedOptionIds.Add(option.Id);
         await LoadDilemmas();
 
@@ -208,6 +287,39 @@
 
     .home-header h1 { font-size: 2rem; margin: 0; }
     .home-header p  { color: #888; margin: 0.25rem 0 0; }
+
+    .filter-bar {
+        display: flex;
+        gap: 0.4rem;
+        margin-bottom: 1.25rem;
+        overflow-x: auto;
+        padding-bottom: 2px;
+        scrollbar-width: none;
+    }
+
+    .filter-bar::-webkit-scrollbar { display: none; }
+
+    .filter-btn {
+        flex-shrink: 0;
+        background: #f3f4f6;
+        border: 1px solid #e5e7eb;
+        border-radius: 20px;
+        padding: 0.4rem 0.9rem;
+        font-size: 0.85rem;
+        font-family: Georgia, serif;
+        cursor: pointer;
+        color: #555;
+        transition: all 0.15s;
+    }
+
+    .filter-btn:hover { background: #e8ecf7; border-color: #c5d0ee; color: #052767; }
+
+    .filter-btn.active {
+        background: #052767;
+        border-color: #052767;
+        color: #fff;
+        font-weight: 600;
+    }
 
     .dilemma-card {
         border: 1px solid #e8e8e8;
