@@ -1,17 +1,306 @@
 @page "/About"
 
-<PageTitle>About</PageTitle>
+<PageTitle>About — Verdict</PageTitle>
 
-<div class="about-container"
-    <h1>Verdict</h1>
+<div class="about-page">
 
-    <section>
+    <div class="about-hero">
+        <div class="hero-icon">⚖</div>
+        <h1>Verdict</h1>
+        <p class="hero-tagline">The community that helps you decide.</p>
+    </div>
+
+    <section class="about-section">
         <h2>What is Verdict?</h2>
-        <p>Ever had a tough decision to make? Verdict is here to help! By posting your dilemmas for everyone to see, you will receive comments, advice and the opinions of others, allowing your dilemma to be solved easily and efficiently.</p>
+        <p>
+            Verdict is a platform for sharing the decisions you can't make alone. Post your dilemma,
+            lay out the options, and let the community vote and comment. Whether it's a career pivot,
+            a life choice, or something as simple as what to order — real people give you real perspectives.
+        </p>
     </section>
 
-    <section>
-        <h2>Our Objective</h2>
-        <p>Our mission is to guide the decision-making process for indecisive individuals, acting as a second opinion when in doubt.</p>
+    <section class="about-section">
+        <h2>How It Works</h2>
+        <div class="steps">
+            <div class="step">
+                <div class="step-num">1</div>
+                <div class="step-body">
+                    <h3>Post your dilemma</h3>
+                    <p>Write your question, add context, set your options and pick a time limit. It takes under a minute.</p>
+                </div>
+            </div>
+            <div class="step">
+                <div class="step-num">2</div>
+                <div class="step-body">
+                    <h3>The community votes</h3>
+                    <p>People browse by category, home feed, or community and cast their vote on your options.</p>
+                </div>
+            </div>
+            <div class="step">
+                <div class="step-num">3</div>
+                <div class="step-body">
+                    <h3>Read the comments</h3>
+                    <p>Votes show you the numbers. Comments show you the reasoning. Both matter.</p>
+                </div>
+            </div>
+            <div class="step">
+                <div class="step-num">4</div>
+                <div class="step-body">
+                    <h3>Make your decision</h3>
+                    <p>Armed with perspectives from people who've been there, decide with confidence.</p>
+                </div>
+            </div>
+        </div>
     </section>
+
+    <section class="about-section">
+        <h2>Features</h2>
+        <div class="features-grid">
+            <div class="feature-card">
+                <div class="feature-icon">🗳️</div>
+                <h3>Anonymous voting</h3>
+                <p>Post owners see results but not who voted for what.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">💬</div>
+                <h3>Threaded comments</h3>
+                <p>Nested replies with vote badges so you know where the commenter stands.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">🌐</div>
+                <h3>Communities</h3>
+                <p>Subscribe to categories and custom communities. Your feed, your interests.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">⏱️</div>
+                <h3>Time limits</h3>
+                <p>Set a deadline from 1 hour to 1 week. Urgency drives engagement.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">🔥</div>
+                <h3>Smart sorting</h3>
+                <p>Browse by New, Hot, Popular, or Top. Find what's trending right now.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">💾</div>
+                <h3>Draft saving</h3>
+                <p>Not ready to post? Save multiple drafts and come back when you are.</p>
+            </div>
+        </div>
+    </section>
+
+    <section class="about-section mission-section">
+        <h2>Our Mission</h2>
+        <blockquote>
+            To give everyone access to a thoughtful second opinion — from people who genuinely care about helping.
+        </blockquote>
+        <p>
+            Big decisions feel smaller when you're not facing them alone. Verdict exists to be that
+            trusted crowd in your corner, available any time, for any choice.
+        </p>
+    </section>
+
+    <section class="about-section">
+        <h2>Community Standards</h2>
+        <div class="standards-list">
+            <div class="standard"><span>✅</span><p>Vote honestly and comment constructively.</p></div>
+            <div class="standard"><span>✅</span><p>Respect that every dilemma matters to the person posting it.</p></div>
+            <div class="standard"><span>✅</span><p>Report content that violates these values — we review every report.</p></div>
+            <div class="standard"><span>❌</span><p>No harassment, hate speech, spam, or deliberate misinformation.</p></div>
+        </div>
+    </section>
+
+    <div class="about-cta">
+        <p>Ready to get a verdict?</p>
+        <a class="cta-btn" href="/post">Post your dilemma ⚖</a>
+    </div>
+
 </div>
+
+<style>
+    .about-page {
+        max-width: 720px;
+        margin: 2rem auto;
+        padding: 0 1rem 4rem;
+        font-family: Georgia, serif;
+    }
+
+    /* Hero */
+    .about-hero {
+        text-align: center;
+        padding: 3rem 1rem 2.5rem;
+    }
+
+    .hero-icon {
+        font-size: 3rem;
+        line-height: 1;
+        margin-bottom: 0.5rem;
+    }
+
+    .about-hero h1 {
+        font-size: 2.8rem;
+        margin: 0 0 0.5rem;
+        color: #052767;
+    }
+
+    .hero-tagline {
+        font-size: 1.15rem;
+        color: #666;
+        margin: 0;
+        font-style: italic;
+    }
+
+    /* Sections */
+    .about-section {
+        margin-bottom: 3rem;
+    }
+
+    .about-section h2 {
+        font-size: 1.4rem;
+        color: #052767;
+        margin: 0 0 1rem;
+        padding-bottom: 0.4rem;
+        border-bottom: 2px solid #e8ecf7;
+    }
+
+    .about-section p {
+        font-size: 0.97rem;
+        color: #444;
+        line-height: 1.7;
+        margin: 0 0 0.75rem;
+    }
+
+    /* Steps */
+    .steps {
+        display: flex;
+        flex-direction: column;
+        gap: 1.25rem;
+    }
+
+    .step {
+        display: flex;
+        gap: 1.1rem;
+        align-items: flex-start;
+    }
+
+    .step-num {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        background: #052767;
+        color: white;
+        font-size: 0.95rem;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        margin-top: 2px;
+    }
+
+    .step-body h3 {
+        margin: 0 0 0.2rem;
+        font-size: 1rem;
+        color: #222;
+    }
+
+    .step-body p {
+        margin: 0;
+        font-size: 0.9rem;
+        color: #666;
+        line-height: 1.55;
+    }
+
+    /* Features */
+    .features-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1rem;
+    }
+
+    .feature-card {
+        background: #f7f9ff;
+        border: 1px solid #e8ecf7;
+        border-radius: 12px;
+        padding: 1.1rem 1.25rem;
+    }
+
+    .feature-icon { font-size: 1.5rem; margin-bottom: 0.4rem; }
+
+    .feature-card h3 {
+        margin: 0 0 0.3rem;
+        font-size: 0.95rem;
+        color: #052767;
+    }
+
+    .feature-card p {
+        margin: 0;
+        font-size: 0.85rem;
+        color: #555;
+        line-height: 1.5;
+    }
+
+    /* Mission */
+    .mission-section blockquote {
+        margin: 0 0 1rem;
+        padding: 1rem 1.25rem;
+        border-left: 4px solid #052767;
+        background: #f0f4ff;
+        border-radius: 0 8px 8px 0;
+        font-size: 1.05rem;
+        font-style: italic;
+        color: #052767;
+    }
+
+    /* Standards */
+    .standards-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.6rem;
+    }
+
+    .standard {
+        display: flex;
+        gap: 0.75rem;
+        align-items: flex-start;
+        font-size: 0.92rem;
+        color: #444;
+    }
+
+    .standard span { flex-shrink: 0; font-size: 1rem; margin-top: 1px; }
+    .standard p { margin: 0; line-height: 1.5; }
+
+    /* CTA */
+    .about-cta {
+        text-align: center;
+        padding: 2.5rem 1rem;
+        background: #f0f4ff;
+        border-radius: 16px;
+        margin-top: 1rem;
+    }
+
+    .about-cta p {
+        font-size: 1.1rem;
+        color: #444;
+        margin: 0 0 1rem;
+    }
+
+    .cta-btn {
+        display: inline-block;
+        padding: 0.8rem 2rem;
+        background: #052767;
+        color: white;
+        border-radius: 8px;
+        text-decoration: none;
+        font-size: 1rem;
+        font-family: Georgia, serif;
+        transition: background 0.2s;
+    }
+
+    .cta-btn:hover { background: #3a0647; }
+
+    @@media (max-width: 540px) {
+        .features-grid { grid-template-columns: 1fr; }
+        .about-hero h1 { font-size: 2.2rem; }
+    }
+</style>

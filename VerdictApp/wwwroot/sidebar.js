@@ -34,9 +34,15 @@
         return JSON.parse(localStorage.getItem('recentGroups') || '[]').slice(0, 3);
     }
 
+    function scrollToId(id) {
+        var el = document.getElementById(id);
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
     window.toggleSidebar = toggleSidebar;
     window.addRecentGroup = addRecentGroup;
     window.getRecentGroups = getRecentGroups;
+    window.scrollToId = scrollToId;
 
     // Initial load
     document.addEventListener('DOMContentLoaded', restoreState);

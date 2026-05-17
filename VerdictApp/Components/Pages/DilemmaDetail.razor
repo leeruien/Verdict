@@ -48,12 +48,34 @@ else
             }
             @if (dilemma.ImagePathList.Any())
             {
-                <div class="image-gallery @(dilemma.ImagePathList.Count > 1 ? "multi" : "")">
-                    @foreach (var path in dilemma.ImagePathList)
-                    {
-                        <img src="@path" alt="Post image" class="gallery-img" />
-                    }
-                </div>
+                @if (dilemma.ImagePathList.Count == 1)
+                {
+                    <div class="image-gallery">
+                        <img src="@dilemma.ImagePathList[0]" alt="Post image" class="gallery-img" />
+                    </div>
+                }
+                else
+                {
+                    <div class="image-carousel">
+                        <img src="@dilemma.ImagePathList[activeImageIndex]"
+                             alt="Image @(activeImageIndex + 1) of @dilemma.ImagePathList.Count"
+                             class="gallery-img" />
+                        <button class="carousel-arrow carousel-prev"
+                                @onclick="PrevImage"
+                                disabled="@(activeImageIndex == 0)">&#8249;</button>
+                        <button class="carousel-arrow carousel-next"
+                                @onclick="NextImage"
+                                disabled="@(activeImageIndex == dilemma.ImagePathList.Count - 1)">&#8250;</button>
+                        <div class="carousel-dots">
+                            @for (int i = 0; i < dilemma.ImagePathList.Count; i++)
+                            {
+                                var idx = i;
+                                <button class="carousel-dot @(activeImageIndex == idx ? "active" : "")"
+                                        @onclick="() => activeImageIndex = idx"></button>
+                            }
+                        </div>
+                    </div>
+                }
             }
 
             @if (currentUserId != null && dilemma.UserId != currentUserId)
@@ -405,6 +427,11 @@ else
     private Guid? editingCommentId;
     private string editingCommentBody = "";
     private Guid? confirmDeleteCommentId;
+
+    // Image carousel state
+    private int activeImageIndex = 0;
+    private void PrevImage() { if (activeImageIndex > 0) activeImageIndex--; }
+    private void NextImage() { if (dilemma != null && activeImageIndex < dilemma.ImagePathList.Count - 1) activeImageIndex++; }
 
     // Report state
     private bool showReportMenu = false;
@@ -887,23 +914,67 @@ else
         margin-top: 1rem;
     }
 
-    .image-gallery.multi {
-        display: grid;
-        grid-template-columns: repeat(2, 1fr);
-        gap: 0.4rem;
-    }
-
     .gallery-img {
         width: 100%;
         max-height: 420px;
         object-fit: cover;
         border-radius: 10px;
+        display: block;
     }
 
-    .image-gallery.multi .gallery-img {
-        max-height: 220px;
-        border-radius: 8px;
+    .image-carousel {
+        position: relative;
+        margin-top: 1rem;
     }
+
+    .image-carousel .gallery-img {
+        border-radius: 10px;
+    }
+
+    .carousel-arrow {
+        position: absolute;
+        top: 50%;
+        transform: translateY(-50%);
+        background: rgba(0,0,0,0.45);
+        color: white;
+        border: none;
+        border-radius: 50%;
+        width: 36px;
+        height: 36px;
+        font-size: 1.4rem;
+        line-height: 1;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: background 0.15s;
+        z-index: 2;
+    }
+
+    .carousel-arrow:hover:not(:disabled) { background: rgba(0,0,0,0.7); }
+    .carousel-arrow:disabled { opacity: 0.25; cursor: default; }
+    .carousel-prev { left: 0.6rem; }
+    .carousel-next { right: 0.6rem; }
+
+    .carousel-dots {
+        display: flex;
+        justify-content: center;
+        gap: 0.4rem;
+        margin-top: 0.6rem;
+    }
+
+    .carousel-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #d0d0d0;
+        border: none;
+        cursor: pointer;
+        padding: 0;
+        transition: background 0.15s;
+    }
+
+    .carousel-dot.active { background: #052767; }
 
     .section { margin-bottom: 2.5rem; }
 

@@ -1,1 +1,349 @@
 @page "/help"
+@rendermode InteractiveServer
+@inject IJSRuntime JS
+
+<PageTitle>Help — Verdict</PageTitle>
+
+<div class="help-page">
+
+    <div class="help-hero">
+        <h1>Help Centre</h1>
+        <p>Everything you need to get the most out of Verdict.</p>
+    </div>
+
+    <div class="help-nav">
+        @foreach (var s in sections)
+        {
+            var sId = s.Id;
+            <button class="help-nav-link" @onclick='() => JS.InvokeVoidAsync("scrollToId", sId)'>@s.Label</button>
+        }
+    </div>
+
+    <!-- Getting Started -->
+    <section class="help-section" id="getting-started">
+        <h2>🚀 Getting Started</h2>
+        <div class="qa-list">
+            <div class="qa">
+                <h3>Do I need an account?</h3>
+                <p>You can browse posts and communities without an account. To vote, comment, post, or subscribe to communities you'll need to register — it's free and takes seconds.</p>
+            </div>
+            <div class="qa">
+                <h3>How do I create an account?</h3>
+                <p>Click <strong>Register</strong> in the sidebar, enter a display name, email address and password. You're in immediately — no email verification required.</p>
+            </div>
+            <div class="qa">
+                <h3>How do I set up my profile?</h3>
+                <p>Go to <strong>Profile → Settings</strong>. You can update your display name, write a short bio, and upload a profile photo (JPG, PNG, WebP · max 5 MB).</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Posting -->
+    <section class="help-section" id="posting">
+        <h2>✏️ Posting a Dilemma</h2>
+        <div class="qa-list">
+            <div class="qa">
+                <h3>How do I post a dilemma?</h3>
+                <p>Click <strong>Post</strong> in the sidebar. Fill in your question, optional context, a category, a time limit, and at least two choices. Hit <em>Post Dilemma</em> and it goes live instantly.</p>
+            </div>
+            <div class="qa">
+                <h3>How many choices can I add?</h3>
+                <p>Between 2 and 5 choices per dilemma. Keep them clear and distinct so voters can make a meaningful decision.</p>
+            </div>
+            <div class="qa">
+                <h3>Can I add images?</h3>
+                <p>Yes — up to 4 images per post. Supported formats: JPG, JPEG, PNG, GIF, WebP. Each image must be under 5 MB.</p>
+            </div>
+            <div class="qa">
+                <h3>What time limits are available?</h3>
+                <p>1 hour · 6 hours · 24 hours · 3 days · 1 week. Once the time runs out, voting closes automatically. The results remain visible.</p>
+            </div>
+            <div class="qa">
+                <h3>Can I edit my post after publishing?</h3>
+                <p>You can edit the description after posting. The title and choices are fixed once voting has started to keep results fair.</p>
+            </div>
+            <div class="qa">
+                <h3>Can I delete my post?</h3>
+                <p>Yes. Open your post, click the <strong>⋮</strong> menu in the top-right corner, then choose <em>Delete post</em>. This also removes all votes and comments permanently.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Drafts -->
+    <section class="help-section" id="drafts">
+        <h2>💾 Drafts</h2>
+        <div class="qa-list">
+            <div class="qa">
+                <h3>How do I save a draft?</h3>
+                <p>On the Post page, click <strong>Save Draft</strong> at any time. Your title, description, category, time limit, and choices are saved. You can save as many drafts as you like.</p>
+            </div>
+            <div class="qa">
+                <h3>How do I load a draft?</h3>
+                <p>Click <strong>📋 Drafts</strong> in the top-right corner of the Post page. A panel lists all your saved drafts with a preview of the title and when it was saved. Click <em>Load</em> to restore it into the form.</p>
+            </div>
+            <div class="qa">
+                <h3>Does saving a draft also save my images?</h3>
+                <p>No — images come from your browser's file picker and cannot be persisted between sessions. You'll need to re-select them when you return to a draft.</p>
+            </div>
+            <div class="qa">
+                <h3>What happens to a draft when I publish?</h3>
+                <p>The loaded draft is automatically deleted once your post goes live. Other drafts are not affected.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Voting -->
+    <section class="help-section" id="voting">
+        <h2>🗳️ Voting</h2>
+        <div class="qa-list">
+            <div class="qa">
+                <h3>Can I vote on my own dilemma?</h3>
+                <p>No. You can see the results in real time, but you cannot vote on a post you created.</p>
+            </div>
+            <div class="qa">
+                <h3>Can I change my vote?</h3>
+                <p>Yes. Open the dilemma, click <strong>🔄 Change vote</strong>, then select a different choice. You can also remove your vote entirely with <strong>✕ Remove vote</strong>.</p>
+            </div>
+            <div class="qa">
+                <h3>Can I vote after the time limit expires?</h3>
+                <p>No. Voting closes when the time limit is reached. You can still read comments and see the final results.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Communities -->
+    <section class="help-section" id="communities">
+        <h2>🌐 Communities</h2>
+        <div class="qa-list">
+            <div class="qa">
+                <h3>What are communities?</h3>
+                <p>Communities are topic-based groups — both built-in categories (Life, Career, Finance…) and custom communities created by users. Each community has its own feed of dilemmas.</p>
+            </div>
+            <div class="qa">
+                <h3>How do I subscribe to a community?</h3>
+                <p>Open any community page and click <strong>+ Subscribe</strong>. Subscribed communities appear in the <strong>Following</strong> feed on the home page, and you'll receive notifications when new posts are made.</p>
+            </div>
+            <div class="qa">
+                <h3>How do I create a community?</h3>
+                <p>In the sidebar, scroll to the communities section and click <strong>+ Add community</strong>. Give it a name, an optional description, and an emoji icon. The slug is generated automatically from the name.</p>
+            </div>
+            <div class="qa">
+                <h3>Can I search within a community?</h3>
+                <p>Yes. Community pages have a search bar that filters posts by title and description in real time, as well as sort tabs (All · Popular · Top · 🔥 Hot).</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Comments -->
+    <section class="help-section" id="comments">
+        <h2>💬 Comments &amp; Replies</h2>
+        <div class="qa-list">
+            <div class="qa">
+                <h3>How do I reply to a comment?</h3>
+                <p>Click <strong>↩ Reply</strong> beneath any comment. A reply box appears inline — type your reply and click <em>Post</em>. Replies are nested under the original comment.</p>
+            </div>
+            <div class="qa">
+                <h3>Can I edit or delete my comment?</h3>
+                <p>Yes. Your own comments show <strong>✏️ Edit</strong> and <strong>🗑️ Delete</strong> buttons. Edited comments are marked with an edit timestamp. Deleting a comment also removes all its replies.</p>
+            </div>
+            <div class="qa">
+                <h3>What do the coloured badges next to usernames mean?</h3>
+                <p>Badges show which option that commenter voted for — so you can see if their advice is biased toward a particular choice.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Reporting -->
+    <section class="help-section" id="reporting">
+        <h2>🚩 Reporting Content</h2>
+        <div class="qa-list">
+            <div class="qa">
+                <h3>How do I report a post?</h3>
+                <p>On a post card in the feed, click <strong>🚩 Report</strong> in the footer. On the full post page, click <strong>⋮</strong> in the top-right corner, then choose <em>🚩 Report post</em>.</p>
+            </div>
+            <div class="qa">
+                <h3>How do I report a comment?</h3>
+                <p>Click <strong>🚩 Report</strong> in the action row beneath any comment or reply you didn't write.</p>
+            </div>
+            <div class="qa">
+                <h3>What happens after I report something?</h3>
+                <p>The reported content is immediately hidden from your view. It remains visible to other users until reviewed. You cannot undo a report.</p>
+            </div>
+            <div class="qa">
+                <h3>What reasons can I choose?</h3>
+                <p>Spam or misleading · Inappropriate content · Harassment or hate speech · Other.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Notifications -->
+    <section class="help-section" id="notifications">
+        <h2>🔔 Notifications</h2>
+        <div class="qa-list">
+            <div class="qa">
+                <h3>What triggers a notification?</h3>
+                <p>You're notified when someone votes on your post, comments on your post, or when a new post is made in a community you subscribe to. You'll also get an alert when one of your dilemmas is expiring soon.</p>
+            </div>
+            <div class="qa">
+                <h3>How do I mark notifications as read?</h3>
+                <p>Click a notification to open the related post — it's marked as read automatically. Or click <strong>Mark all as read</strong> at the top of the Notifications page. The badge in the sidebar updates instantly.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Inbox -->
+    <section class="help-section" id="inbox">
+        <h2>📨 Inbox &amp; Messages</h2>
+        <div class="qa-list">
+            <div class="qa">
+                <h3>How do I send someone a message?</h3>
+                <p>Go to <strong>Inbox</strong> and click <strong>✉️ New Message</strong>. Search for the user by display name, select them, write your message and click <em>Send Request</em>.</p>
+            </div>
+            <div class="qa">
+                <h3>Why does a message say "Pending"?</h3>
+                <p>The recipient hasn't accepted the conversation yet. Once they accept, the conversation moves to your Messages section and you can both reply freely.</p>
+            </div>
+            <div class="qa">
+                <h3>Can I decline a message request?</h3>
+                <p>Yes. Open the conversation and click <strong>Decline</strong>. The conversation is closed and you'll be returned to your inbox.</p>
+            </div>
+        </div>
+    </section>
+
+    <div class="help-footer">
+        <p>Still have questions? Post in the <a href="/group/other">Other community</a> and the community will help.</p>
+    </div>
+
+</div>
+
+@code {
+    private record Section(string Id, string Label);
+    private List<Section> sections = new()
+    {
+        new("getting-started", "Getting started"),
+        new("posting",         "Posting"),
+        new("drafts",          "Drafts"),
+        new("voting",          "Voting"),
+        new("communities",     "Communities"),
+        new("comments",        "Comments"),
+        new("reporting",       "Reporting"),
+        new("notifications",   "Notifications"),
+        new("inbox",           "Inbox"),
+    };
+}
+
+<style>
+    .help-page {
+        max-width: 720px;
+        margin: 2rem auto;
+        padding: 0 1rem 4rem;
+        font-family: Georgia, serif;
+    }
+
+    /* Hero */
+    .help-hero {
+        margin-bottom: 1.75rem;
+    }
+
+    .help-hero h1 {
+        font-size: 2.2rem;
+        margin: 0 0 0.3rem;
+        color: #052767;
+    }
+
+    .help-hero p {
+        color: #888;
+        margin: 0;
+        font-size: 1rem;
+    }
+
+    /* Quick nav */
+    .help-nav {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+        margin-bottom: 2.5rem;
+        padding: 1rem;
+        background: #f7f9ff;
+        border: 1px solid #e8ecf7;
+        border-radius: 10px;
+    }
+
+    .help-nav-link {
+        background: white;
+        border: 1px solid #dce6ff;
+        border-radius: 20px;
+        padding: 0.3rem 0.8rem;
+        font-size: 0.82rem;
+        color: #052767;
+        font-family: Georgia, serif;
+        cursor: pointer;
+        transition: all 0.15s;
+    }
+
+    .help-nav-link:hover { background: #052767; color: white; border-color: #052767; }
+
+    /* Sections */
+    .help-section {
+        margin-bottom: 2.75rem;
+        scroll-margin-top: 1rem;
+    }
+
+    .help-section h2 {
+        font-size: 1.3rem;
+        color: #052767;
+        margin: 0 0 1.1rem;
+        padding-bottom: 0.4rem;
+        border-bottom: 2px solid #e8ecf7;
+    }
+
+    /* Q&A */
+    .qa-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+    }
+
+    .qa {
+        padding: 0.9rem 0;
+        border-bottom: 1px solid #f3f3f3;
+    }
+
+    .qa:last-child { border-bottom: none; }
+
+    .qa h3 {
+        font-size: 0.97rem;
+        color: #222;
+        margin: 0 0 0.35rem;
+        font-weight: 700;
+    }
+
+    .qa p {
+        font-size: 0.9rem;
+        color: #555;
+        margin: 0;
+        line-height: 1.65;
+    }
+
+    .qa p strong { color: #222; }
+    .qa p em { font-style: italic; color: #444; }
+
+    /* Footer */
+    .help-footer {
+        text-align: center;
+        padding: 2rem 1rem;
+        background: #f7f9ff;
+        border-radius: 12px;
+        font-size: 0.92rem;
+        color: #666;
+    }
+
+    .help-footer a { color: #052767; text-decoration: none; font-weight: 600; }
+    .help-footer a:hover { text-decoration: underline; }
+
+    @@media (max-width: 480px) {
+        .help-hero h1 { font-size: 1.7rem; }
+        .help-nav { gap: 0.3rem; }
+        .help-nav-link { font-size: 0.78rem; }
+    }
+</style>
