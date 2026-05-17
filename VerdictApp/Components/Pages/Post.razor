@@ -15,9 +15,67 @@
 
 <div class="post-page">
     <div class="post-header">
-        <h1>Post a Dilemma</h1>
-        <p>Ask the community to help you decide</p>
+        <div>
+            <h1>Post a Dilemma</h1>
+            <p>Ask the community to help you decide</p>
+        </div>
+
+        @if (currentUserId != null)
+        {
+            <div class="drafts-wrapper">
+                <button class="drafts-toggle-btn" @onclick="() => showDraftsPanel = !showDraftsPanel">
+                    📋 Drafts @(userDrafts.Count > 0 ? $"({userDrafts.Count})" : "")
+                </button>
+
+                @if (showDraftsPanel)
+                {
+                    <div class="drafts-panel">
+                        @if (!userDrafts.Any())
+                        {
+                            <p class="drafts-empty">No saved drafts yet.</p>
+                        }
+                        else
+                        {
+                            @foreach (var d in userDrafts.OrderByDescending(d => d.SavedAt))
+                            {
+                                var isLoaded = loadedDraftId == d.Id;
+                                <div class="draft-item @(isLoaded ? "loaded" : "")">
+                                    <div class="draft-item-info">
+                                        <span class="draft-item-title">@(string.IsNullOrWhiteSpace(d.Title) ? "Untitled draft" : d.Title)</span>
+                                        <span class="draft-item-time">@FormatDraftAge(d.SavedAt)</span>
+                                    </div>
+                                    <div class="draft-item-actions">
+                                        @if (!isLoaded)
+                                        {
+                                            <button class="draft-load-btn" @onclick="() => LoadDraft(d)">Load</button>
+                                        }
+                                        else
+                                        {
+                                            <span class="draft-loaded-badge">Loaded</span>
+                                        }
+                                        <button class="draft-delete-btn" @onclick="() => DeleteDraft(d.Id)">✕</button>
+                                    </div>
+                                </div>
+                            }
+                        }
+                    </div>
+                }
+            </div>
+        }
     </div>
+
+    @if (loadedDraftId.HasValue)
+    {
+        <div class="alert-draft">
+            📝 Editing draft — changes save to this draft
+            <button class="discard-draft-btn" @onclick="ClearForm">✕ Clear form</button>
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(draftSavedMessage))
+    {
+        <div class="alert-draft-saved">@draftSavedMessage</div>
+    }
 
     @if (!string.IsNullOrEmpty(successMessage))
     {
@@ -132,20 +190,15 @@
             </div>
         </div>
 
-        <!-- Submit -->
-        <button type="button"
-                class="submit-btn"
-                @onclick="HandleSubmit"
-                disabled="@isBusy">
-            @if (isBusy)
-            {
-                <span>Posting...</span>
-            }
-            else
-            {
-                <span>Post Dilemma ⚖</span>
-            }
-        </button>
+        <!-- Actions -->
+        <div class="form-actions">
+            <button type="button" class="draft-btn" @onclick="SaveDraft" disabled="@isBusy">
+                @(loadedDraftId.HasValue ? "💾 Update Draft" : "💾 Save Draft")
+            </button>
+            <button type="button" class="submit-btn" @onclick="HandleSubmit" disabled="@isBusy">
+                @(isBusy ? "Posting..." : "Post Dilemma ⚖")
+            </button>
+        </div>
 
     </div>
 </div>
@@ -159,6 +212,11 @@
     private bool isBusy = false;
     private string successMessage = "";
     private string errorMessage = "";
+    private string draftSavedMessage = "";
+    private Guid? loadedDraftId;
+    private List<VerdictApp.Models.Draft> userDrafts = new();
+    private bool showDraftsPanel = false;
+    private string? currentUserId;
     private record SelectedImage(string Name, long Size, string Ext, byte[] Data);
     private List<SelectedImage> selectedImages = new();
     private string imageError = "";
@@ -238,6 +296,108 @@
         var customCommunities = await Db.Communities.OrderBy(c => c.Name).ToListAsync();
         foreach (var c in customCommunities)
             categories.Add(new(c.Slug, c.Name, c.Icon));
+
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = await UserManager.GetUserAsync(authState.User);
+        currentUserId = user?.Id;
+
+        if (currentUserId != null)
+            userDrafts = await Db.Drafts
+                .Where(d => d.UserId == currentUserId)
+                .OrderByDescending(d => d.SavedAt)
+                .ToListAsync();
+    }
+
+    private void LoadDraft(VerdictApp.Models.Draft d)
+    {
+        title = d.Title;
+        description = d.Description;
+        selectedCategory = d.Category;
+        selectedHours = d.ExpiresAtHours;
+        var saved = System.Text.Json.JsonSerializer.Deserialize<List<string>>(d.OptionsJson);
+        if (saved != null && saved.Count >= 2) options = saved;
+        loadedDraftId = d.Id;
+        showDraftsPanel = false;
+        errorMessage = "";
+        successMessage = "";
+    }
+
+    private void ClearForm()
+    {
+        title = "";
+        description = "";
+        selectedCategory = "";
+        selectedHours = 24;
+        options = new() { "", "" };
+        loadedDraftId = null;
+    }
+
+    private async Task SaveDraft()
+    {
+        if (currentUserId == null) return;
+        isBusy = true;
+        draftSavedMessage = "";
+
+        var optionsJson = System.Text.Json.JsonSerializer.Serialize(options);
+
+        if (loadedDraftId.HasValue)
+        {
+            var draft = await Db.Drafts.FindAsync(loadedDraftId.Value);
+            if (draft != null)
+            {
+                draft.Title = title;
+                draft.Description = description;
+                draft.Category = selectedCategory;
+                draft.ExpiresAtHours = selectedHours;
+                draft.OptionsJson = optionsJson;
+                draft.SavedAt = DateTime.UtcNow;
+                var idx = userDrafts.FindIndex(d => d.Id == draft.Id);
+                if (idx >= 0) userDrafts[idx] = draft;
+            }
+        }
+        else
+        {
+            var draft = new VerdictApp.Models.Draft
+            {
+                Id = Guid.NewGuid(),
+                UserId = currentUserId,
+                Title = title,
+                Description = description,
+                Category = selectedCategory,
+                ExpiresAtHours = selectedHours,
+                OptionsJson = optionsJson,
+                SavedAt = DateTime.UtcNow
+            };
+            loadedDraftId = draft.Id;
+            Db.Drafts.Add(draft);
+            userDrafts.Insert(0, draft);
+        }
+
+        await Db.SaveChangesAsync();
+        isBusy = false;
+        draftSavedMessage = "✓ Draft saved";
+        StateHasChanged();
+        await Task.Delay(2500);
+        draftSavedMessage = "";
+    }
+
+    private async Task DeleteDraft(Guid draftId)
+    {
+        var draft = await Db.Drafts.FindAsync(draftId);
+        if (draft != null) Db.Drafts.Remove(draft);
+        await Db.SaveChangesAsync();
+        userDrafts.RemoveAll(d => d.Id == draftId);
+        if (loadedDraftId == draftId) ClearForm();
+        if (!userDrafts.Any()) showDraftsPanel = false;
+    }
+
+    private string FormatDraftAge(DateTime savedAt)
+    {
+        var diff = DateTime.UtcNow - savedAt;
+        if (diff.TotalMinutes < 1) return "just now";
+        if (diff.TotalHours < 1)   return $"{(int)diff.TotalMinutes}m ago";
+        if (diff.TotalDays < 1)    return $"{(int)diff.TotalHours}h ago";
+        return $"{(int)diff.TotalDays}d ago";
     }
 
     private List<TimeLimit> timeLimits = new()
@@ -311,8 +471,14 @@
 
         await NotificationSvc.NotifyNewPostAsync(dilemma, user.Id);
 
+        if (loadedDraftId.HasValue)
+        {
+            var draft = await Db.Drafts.FindAsync(loadedDraftId.Value);
+            if (draft != null) Db.Drafts.Remove(draft);
+            await Db.SaveChangesAsync();
+        }
+
         isBusy = false;
-        @* Nav.NavigateTo("/dilemma/" + dilemma.Id); *@
         Nav.NavigateTo("/");
     }
 }
@@ -326,6 +492,10 @@
     }
 
     .post-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 1rem;
         margin-bottom: 2rem;
     }
 
@@ -338,6 +508,122 @@
         color: #888;
         margin: 0.25rem 0 0;
     }
+
+    .drafts-wrapper {
+        position: relative;
+        flex-shrink: 0;
+    }
+
+    .drafts-toggle-btn {
+        padding: 0.45rem 1rem;
+        background: white;
+        border: 1px solid #d0d5dd;
+        border-radius: 20px;
+        font-size: 0.85rem;
+        font-family: Georgia, serif;
+        cursor: pointer;
+        color: #444;
+        transition: all 0.15s;
+        white-space: nowrap;
+    }
+
+    .drafts-toggle-btn:hover { border-color: #052767; color: #052767; background: #f0f4ff; }
+
+    .drafts-panel {
+        position: absolute;
+        top: calc(100% + 6px);
+        right: 0;
+        width: 280px;
+        background: white;
+        border: 1px solid #e0e0e0;
+        border-radius: 10px;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+        z-index: 30;
+        overflow: hidden;
+    }
+
+    .drafts-empty {
+        padding: 1rem;
+        font-size: 0.85rem;
+        color: #aaa;
+        text-align: center;
+        font-style: italic;
+        margin: 0;
+    }
+
+    .draft-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+        padding: 0.65rem 0.85rem;
+        border-bottom: 1px solid #f0f0f0;
+        transition: background 0.12s;
+    }
+
+    .draft-item:last-child { border-bottom: none; }
+    .draft-item:hover { background: #fafafa; }
+    .draft-item.loaded { background: #f0f4ff; }
+
+    .draft-item-info {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.1rem;
+    }
+
+    .draft-item-title {
+        font-size: 0.88rem;
+        font-weight: 600;
+        color: #222;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .draft-item-time {
+        font-size: 0.75rem;
+        color: #aaa;
+    }
+
+    .draft-item-actions {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        flex-shrink: 0;
+    }
+
+    .draft-load-btn {
+        padding: 0.25rem 0.65rem;
+        background: #052767;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        font-size: 0.78rem;
+        font-family: Georgia, serif;
+        cursor: pointer;
+    }
+
+    .draft-load-btn:hover { background: #3a0647; }
+
+    .draft-loaded-badge {
+        font-size: 0.75rem;
+        color: #052767;
+        font-weight: 600;
+    }
+
+    .draft-delete-btn {
+        background: none;
+        border: none;
+        color: #ccc;
+        cursor: pointer;
+        font-size: 0.8rem;
+        padding: 0.2rem;
+        line-height: 1;
+    }
+
+    .draft-delete-btn:hover { color: #e06c75; }
 
     .post-form {
         display: flex;
@@ -486,8 +772,69 @@
 
     .add-option-btn:hover { border-color: #052767; color: #052767; }
 
+    /* Actions row */
+    .form-actions {
+        display: flex;
+        gap: 0.75rem;
+        align-items: center;
+    }
+
+    .draft-btn {
+        flex: 1;
+        padding: 0.9rem;
+        background: white;
+        color: #052767;
+        border: 2px solid #052767;
+        border-radius: 8px;
+        font-size: 1rem;
+        font-family: Georgia, serif;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .draft-btn:hover:not(:disabled) { background: #f0f4ff; }
+    .draft-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* Draft banners */
+    .alert-draft {
+        background: #fff8e1;
+        color: #7a5800;
+        border: 1px solid #ffe082;
+        border-radius: 8px;
+        padding: 0.75rem 1rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .discard-draft-btn {
+        background: none;
+        border: 1px solid #c8a400;
+        border-radius: 20px;
+        padding: 0.2rem 0.7rem;
+        font-size: 0.8rem;
+        color: #7a5800;
+        cursor: pointer;
+        white-space: nowrap;
+        font-family: Georgia, serif;
+    }
+
+    .discard-draft-btn:hover { background: #ffe082; }
+
+    .alert-draft-saved {
+        background: #e8f5e9;
+        color: #2e7d32;
+        border: 1px solid #a5d6a7;
+        border-radius: 8px;
+        padding: 0.75rem 1rem;
+        margin-bottom: 0.5rem;
+    }
+
     /* Submit */
     .submit-btn {
+        flex: 1;
         padding: 0.9rem;
         background: #052767;
         color: white;
