@@ -20,6 +20,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<Conversation> Conversations { get; set; }
     public DbSet<DirectMessage> DirectMessages { get; set; }
     public DbSet<Community> Communities { get; set; }
+    public DbSet<Report> Reports { get; set; }
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -40,5 +41,11 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
         builder.Entity<Vote>()
             .HasIndex(v => new { v.UserId, v.DilemmaOptionId })
             .IsUnique();
+
+        builder.Entity<Report>().ToTable("Reports");
+        builder.Entity<Report>()
+            .HasIndex(r => new { r.ReporterUserId, r.DilemmaId });
+        builder.Entity<Report>()
+            .HasIndex(r => new { r.ReporterUserId, r.CommentId });
     }
 }

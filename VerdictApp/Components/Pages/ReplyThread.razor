@@ -79,6 +79,30 @@
                         <button class="comment-action-btn" @onclick="() => StartEditReply(reply.Id, reply.Body)">✏️ Edit</button>
                         <button class="comment-action-btn danger" @onclick="() => { confirmDeleteReplyId = reply.Id; editingReplyId = null; }">🗑️ Delete</button>
                     }
+                    else if (CurrentUserId != null && OnReportComment != null)
+                    {
+                        @if (ReportedCommentIds.Contains(reply.Id))
+                        {
+                            <span class="report-done">✓ Reported</span>
+                        }
+                        else if (reportingReplyId == reply.Id)
+                        {
+                            <div class="comment-report-form">
+                                <select class="report-select" @bind="replyReportReason">
+                                    <option value="spam">Spam or misleading</option>
+                                    <option value="inappropriate">Inappropriate content</option>
+                                    <option value="harassment">Harassment or hate speech</option>
+                                    <option value="other">Other</option>
+                                </select>
+                                <button class="report-submit-btn" @onclick="() => SubmitReplyReport(reply.Id)">Submit</button>
+                                <button class="report-cancel-btn" @onclick="() => reportingReplyId = null">Cancel</button>
+                            </div>
+                        }
+                        else
+                        {
+                            <button class="report-btn" @onclick='() => { reportingReplyId = reply.Id; replyReportReason = "spam"; }'>🚩 Report</button>
+                        }
+                    }
                     @if (childCount > 3 && !expandedThreads.Contains(reply.Id) && !ForceExpanded)
                     {
                         <button class="show-more-btn" @onclick="() => ExpandThread(reply.Id)">
@@ -116,6 +140,8 @@
                              OnPostReply="OnPostReply"
                              OnDeleteComment="OnDeleteComment"
                              OnEditComment="OnEditComment"
+                             OnReportComment="OnReportComment"
+                             ReportedCommentIds="ReportedCommentIds"
                              GetVoteBadgeFunc="GetVoteBadgeFunc" />
             }
 
@@ -139,6 +165,8 @@
     [Parameter] public Func<Guid, Task>? OnDeleteComment { get; set; }
     [Parameter] public Func<Guid, string, Task>? OnEditComment { get; set; }
     [Parameter] public Func<string?, (string, string)>? GetVoteBadgeFunc { get; set; }
+    [Parameter] public Func<Guid, string, Task>? OnReportComment { get; set; }
+    [Parameter] public HashSet<Guid> ReportedCommentIds { get; set; } = new();
 
     private Guid? activeInlineReplyId;
     private string inlineText = "";
@@ -148,6 +176,9 @@
     private Guid? editingReplyId;
     private string editingReplyBody = "";
     private Guid? confirmDeleteReplyId;
+
+    private Guid? reportingReplyId;
+    private string replyReportReason = "spam";
 
     private void StartEditReply(Guid replyId, string body)
     {
@@ -208,6 +239,15 @@
     {
         activeInlineReplyId = null;
         inlineText = "";
+        StateHasChanged();
+    }
+
+    private async Task SubmitReplyReport(Guid replyId)
+    {
+        if (OnReportComment == null) return;
+        await OnReportComment(replyId, replyReportReason);
+        ReportedCommentIds.Add(replyId);
+        reportingReplyId = null;
         StateHasChanged();
     }
 

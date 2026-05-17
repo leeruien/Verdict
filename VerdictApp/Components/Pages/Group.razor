@@ -47,7 +47,16 @@ else
             }
         </div>
 
-        <div class="search-bar">
+        <div class="group-controls">
+            <div class="filter-bar">
+                @foreach (var f in GroupFilters)
+                {
+                    <button class="filter-btn @(activeFilter == f.Key ? "active" : "")"
+                            @onclick="() => activeFilter = f.Key">
+                        @f.Value
+                    </button>
+                }
+            </div>
             <input class="group-search" type="search" placeholder="Search posts…"
                    @bind="searchQuery" @bind:event="oninput" />
         </div>
@@ -131,7 +140,34 @@ else
                         <span>@totalVotes votes</span>
                         <span>@dilemma.Comments.Count comments</span>
                         @if (expired) { <span class="expired-tag">Expired</span> }
+                        @if (currentUserId != null && !isOwner)
+                        {
+                            @if (reportedDilemmaIds.Contains(dilemma.Id))
+                            {
+                                <span class="report-done">✓ Reported</span>
+                            }
+                            else
+                            {
+                                <button class="report-btn" @onclick='() => { reportingDilemmaId = dilemma.Id; reportReason = "spam"; }'>🚩 Report</button>
+                            }
+                        }
                     </div>
+                    @if (reportingDilemmaId == dilemma.Id)
+                    {
+                        <div class="report-form">
+                            <span class="report-label">Why are you reporting this?</span>
+                            <select class="report-select" @bind="reportReason">
+                                <option value="spam">Spam or misleading</option>
+                                <option value="inappropriate">Inappropriate content</option>
+                                <option value="harassment">Harassment or hate speech</option>
+                                <option value="other">Other</option>
+                            </select>
+                            <div class="report-actions">
+                                <button class="report-submit-btn" @onclick="() => SubmitPostReport(dilemma.Id)">Submit</button>
+                                <button class="report-cancel-btn" @onclick="() => reportingDilemmaId = null">Cancel</button>
+                            </div>
+                        </div>
+                    }
                 </div>
             }
         }
@@ -143,9 +179,36 @@ else
 
     private List<Dilemma>? dilemmas;
     private string searchQuery = "";
-    private IEnumerable<Dilemma> FilteredDilemmas => dilemmas == null ? [] :
-        string.IsNullOrWhiteSpace(searchQuery) ? dilemmas :
-        dilemmas.Where(d =>
+    private string activeFilter = "all";
+    private HashSet<Guid> reportedDilemmaIds = new();
+    private Guid? reportingDilemmaId;
+    private string reportReason = "spam";
+
+    private static readonly Dictionary<string, string> GroupFilters = new()
+    {
+        ["all"]     = "All",
+        ["popular"] = "Popular",
+        ["top"]     = "Top",
+        ["hot"]     = "🔥 Hot",
+    };
+
+    private IEnumerable<Dilemma> SortedDilemmas => activeFilter switch
+    {
+        "popular" => (dilemmas ?? []).OrderByDescending(d => d.Options.Sum(o => o.Votes.Count)),
+        "top"     => (dilemmas ?? []).Where(d => d.CreatedAt >= DateTime.UtcNow.AddDays(-7))
+                                     .OrderByDescending(d => d.Options.Sum(o => o.Votes.Count)),
+        "hot"     => (dilemmas ?? []).OrderByDescending(d =>
+                     {
+                         var votes = d.Options.Sum(o => o.Votes.Count);
+                         var age   = (DateTime.UtcNow - d.CreatedAt).TotalHours;
+                         return votes / Math.Pow(age + 2, 1.5);
+                     }),
+        _         => (dilemmas ?? []).OrderByDescending(d => d.CreatedAt),
+    };
+
+    private IEnumerable<Dilemma> FilteredDilemmas =>
+        string.IsNullOrWhiteSpace(searchQuery) ? SortedDilemmas :
+        SortedDilemmas.Where(d =>
             d.Title.Contains(searchQuery, StringComparison.OrdinalIgnoreCase) ||
             (d.Description ?? "").Contains(searchQuery, StringComparison.OrdinalIgnoreCase));
     private string? currentUserId;
@@ -190,6 +253,12 @@ else
 
             isSubscribed = await Db.CategorySubscriptions
                 .AnyAsync(s => s.UserId == currentUserId && s.Category == Category);
+
+            var myReports = await Db.Reports
+                .Where(r => r.ReporterUserId == currentUserId && r.DilemmaId != null)
+                .Select(r => r.DilemmaId!.Value)
+                .ToListAsync();
+            reportedDilemmaIds = myReports.ToHashSet();
         }
 
         subscriberCount = await Db.CategorySubscriptions
@@ -202,6 +271,27 @@ else
             .Include(d => d.Comments)
             .OrderByDescending(d => d.CreatedAt)
             .ToListAsync();
+    }
+
+    private async Task SubmitPostReport(Guid dilemmaId)
+    {
+        if (currentUserId == null) return;
+        var already = await Db.Reports.AnyAsync(r =>
+            r.ReporterUserId == currentUserId && r.DilemmaId == dilemmaId);
+        if (!already)
+        {
+            Db.Reports.Add(new VerdictApp.Models.Report
+            {
+                Id = Guid.NewGuid(),
+                ReporterUserId = currentUserId,
+                DilemmaId = dilemmaId,
+                Reason = reportReason,
+                CreatedAt = DateTime.UtcNow
+            });
+            await Db.SaveChangesAsync();
+        }
+        reportedDilemmaIds.Add(dilemmaId);
+        reportingDilemmaId = null;
     }
 
     private async Task ToggleSubscribe()
@@ -386,8 +476,43 @@ else
     .dilemma-footer { display: flex; gap: 1rem; font-size: 0.8rem; color: #aaa; margin-top: 0.5rem; }
     .expired-tag    { margin-left: auto; color: #e06c75; font-weight: 600; }
 
-    .search-bar {
+    .group-controls {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
         margin-bottom: 1.25rem;
+    }
+
+    .filter-bar {
+        display: flex;
+        gap: 0.4rem;
+        overflow-x: auto;
+        padding-bottom: 2px;
+        scrollbar-width: none;
+    }
+
+    .filter-bar::-webkit-scrollbar { display: none; }
+
+    .filter-btn {
+        flex-shrink: 0;
+        background: #f3f4f6;
+        border: 1px solid #e5e7eb;
+        border-radius: 20px;
+        padding: 0.4rem 0.9rem;
+        font-size: 0.85rem;
+        font-family: Georgia, serif;
+        cursor: pointer;
+        color: #555;
+        transition: all 0.15s;
+    }
+
+    .filter-btn:hover { background: #e8ecf7; border-color: #c5d0ee; color: #052767; }
+
+    .filter-btn.active {
+        background: #052767;
+        border-color: #052767;
+        color: #fff;
+        font-weight: 600;
     }
 
     .group-search {
@@ -411,4 +536,65 @@ else
     .loading, .empty-state { text-align: center; color: #aaa; padding: 3rem 0; font-style: italic; }
     .empty-state a { color: #052767; }
     .empty-state strong { color: #555; font-style: normal; }
+
+    .report-btn {
+        margin-left: auto;
+        background: none;
+        border: none;
+        font-size: 0.78rem;
+        color: #bbb;
+        cursor: pointer;
+        padding: 0;
+    }
+
+    .report-btn:hover { color: #e06c75; }
+
+    .report-done { margin-left: auto; font-size: 0.78rem; color: #aaa; }
+
+    .report-form {
+        margin-top: 0.6rem;
+        padding: 0.75rem;
+        background: #fdf5f5;
+        border: 1px solid #f5c6c6;
+        border-radius: 8px;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .report-label { font-size: 0.82rem; color: #555; }
+
+    .report-select {
+        padding: 0.4rem 0.6rem;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        font-size: 0.85rem;
+        font-family: Georgia, serif;
+    }
+
+    .report-actions { display: flex; gap: 0.5rem; }
+
+    .report-submit-btn {
+        padding: 0.35rem 0.85rem;
+        background: #c0392b;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        font-size: 0.82rem;
+        cursor: pointer;
+    }
+
+    .report-submit-btn:hover { background: #a93226; }
+
+    .report-cancel-btn {
+        padding: 0.35rem 0.85rem;
+        background: none;
+        border: 1px solid #ccc;
+        border-radius: 6px;
+        font-size: 0.82rem;
+        cursor: pointer;
+        color: #555;
+    }
+
+    .report-cancel-btn:hover { border-color: #999; }
 </style>
