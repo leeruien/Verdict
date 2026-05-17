@@ -17,6 +17,17 @@
 {
     <p class="loading">Loading...</p>
 }
+else if (postAlreadyReported)
+{
+    <div class="detail-page">
+        <a class="back-btn" href="javascript:history.back()">← Back</a>
+        <div class="reported-post-notice">
+            <span class="reported-icon">🚩</span>
+            <p>You've reported this post. It's hidden from your view.</p>
+            <a href="/">Go home</a>
+        </div>
+    </div>
+}
 else
 {
     <div class="detail-page">
@@ -231,6 +242,7 @@ else
                     .Where(c => c.ParentCommentId == null)
                     .OrderBy(c => c.CreatedAt))
                 {
+                    if (reportedCommentIds.Contains(comment.Id)) continue;
                     <div class="comment-card">
                         <div class="comment-header">
                             @if (!string.IsNullOrWhiteSpace(comment.User?.ProfilePhotoPath))
@@ -1331,6 +1343,17 @@ else
         font-style: italic;
         margin-left: 0.3rem;
     }
+
+    .reported-post-notice {
+        text-align: center;
+        padding: 4rem 1rem;
+        color: #aaa;
+        font-style: italic;
+    }
+
+    .reported-post-notice .reported-icon { font-size: 2rem; display: block; margin-bottom: 0.75rem; }
+    .reported-post-notice p { margin: 0 0 1rem; font-size: 0.95rem; }
+    .reported-post-notice a { color: #052767; font-style: normal; }
 
     .reported-item {
         display: block;

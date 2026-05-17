@@ -52,6 +52,7 @@
     {
         @foreach (var dilemma in dilemmas)
         {
+            if (reportedDilemmaIds.Contains(dilemma.Id)) continue;
             var totalVotesOnCard = dilemma.Options.Sum(o => o.Votes.Count);
             var isOwner = dilemma.UserId == currentUserId;
             var expired = IsExpired(dilemma);

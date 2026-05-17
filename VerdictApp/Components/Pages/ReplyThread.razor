@@ -5,6 +5,7 @@
     <div class="replies-list">
         @foreach (var reply in Replies)
         {
+            if (ReportedCommentIds.Contains(reply.Id)) continue;
             var childCount = CountDescendants(reply.Id);
 
             <div class="reply-card">

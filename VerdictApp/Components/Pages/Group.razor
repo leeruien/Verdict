@@ -194,16 +194,16 @@ else
 
     private IEnumerable<Dilemma> SortedDilemmas => activeFilter switch
     {
-        "popular" => (dilemmas ?? []).OrderByDescending(d => d.Options.Sum(o => o.Votes.Count)),
-        "top"     => (dilemmas ?? []).Where(d => d.CreatedAt >= DateTime.UtcNow.AddDays(-7))
+        "popular" => (dilemmas ?? []).Where(d => !reportedDilemmaIds.Contains(d.Id)).OrderByDescending(d => d.Options.Sum(o => o.Votes.Count)),
+        "top"     => (dilemmas ?? []).Where(d => !reportedDilemmaIds.Contains(d.Id) && d.CreatedAt >= DateTime.UtcNow.AddDays(-7))
                                      .OrderByDescending(d => d.Options.Sum(o => o.Votes.Count)),
-        "hot"     => (dilemmas ?? []).OrderByDescending(d =>
+        "hot"     => (dilemmas ?? []).Where(d => !reportedDilemmaIds.Contains(d.Id)).OrderByDescending(d =>
                      {
                          var votes = d.Options.Sum(o => o.Votes.Count);
                          var age   = (DateTime.UtcNow - d.CreatedAt).TotalHours;
                          return votes / Math.Pow(age + 2, 1.5);
                      }),
-        _         => (dilemmas ?? []).OrderByDescending(d => d.CreatedAt),
+        _         => (dilemmas ?? []).Where(d => !reportedDilemmaIds.Contains(d.Id)).OrderByDescending(d => d.CreatedAt),
     };
 
     private IEnumerable<Dilemma> FilteredDilemmas =>
