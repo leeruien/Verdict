@@ -9,6 +9,7 @@
 @inject AuthenticationStateProvider AuthStateProvider
 @inject ApplicationDbContext Db
 @inject NavigationManager Nav
+@inject VerdictApp.Services.BadgeNotifier BadgeNotifier
 
 <div class="home-page">
 
@@ -69,7 +70,14 @@
                     {
                         <a class="category-tag" href="/group/@dilemma.Category">@GetCategoryIcon(dilemma.Category) @dilemma.Category</a>
                     }
-                    <span class="time-left">⏱ @GetTimeLeft(dilemma.ExpiresAt)</span>
+                    @if (expired)
+                    {
+                        <span class="expired-tag">Expired</span>
+                    }
+                    else
+                    {
+                        <span class="time-left">⏱ @GetTimeLeft(dilemma.ExpiresAt)</span>
+                    }
                 </div>
 
                 <h2 class="dilemma-title" style="cursor:pointer"
@@ -118,10 +126,6 @@
                 <div class="dilemma-footer">
                     <span>@totalVotesOnCard votes</span>
                     <span>@dilemma.Comments.Count comments</span>
-                    @if (expired)
-                    {
-                        <span class="expired-tag">Expired</span>
-                    }
                     @if (currentUserId != null && !isOwner)
                     {
                         @if (reportedDilemmaIds.Contains(dilemma.Id))
@@ -229,36 +233,46 @@
                 if (currentUserId == null) { dilemmas = new(); return; }
                 dilemmas = await query
                     .Where(d => subscribedCategories.Contains(d.Category))
-                    .OrderByDescending(d => d.CreatedAt)
+                    .OrderBy(d => d.ExpiresAt != null && d.ExpiresAt < DateTime.UtcNow)
+                    .ThenByDescending(d => d.CreatedAt)
                     .ToListAsync();
                 break;
 
             case "popular":
-                // All-time most voted — sorted in memory after fetch
                 var all = await query.ToListAsync();
-                dilemmas = all.OrderByDescending(d => d.Options.Sum(o => o.Votes.Count)).ToList();
+                dilemmas = all
+                    .OrderBy(IsExpired)
+                    .ThenByDescending(d => d.Options.Sum(o => o.Votes.Count))
+                    .ToList();
                 break;
 
             case "top":
-                // Most voted in the last 7 days
                 var cutoff = DateTime.UtcNow.AddDays(-7);
                 var recent = await query.Where(d => d.CreatedAt >= cutoff).ToListAsync();
-                dilemmas = recent.OrderByDescending(d => d.Options.Sum(o => o.Votes.Count)).ToList();
+                dilemmas = recent
+                    .OrderBy(IsExpired)
+                    .ThenByDescending(d => d.Options.Sum(o => o.Votes.Count))
+                    .ToList();
                 break;
 
             case "hot":
-                // Vote velocity: votes / (age_hours + 2)^1.5  (Reddit-style decay)
                 var hotAll = await query.ToListAsync();
-                dilemmas = hotAll.OrderByDescending(d =>
-                {
-                    var votes = d.Options.Sum(o => o.Votes.Count);
-                    var ageHours = (DateTime.UtcNow - d.CreatedAt).TotalHours;
-                    return votes / Math.Pow(ageHours + 2, 1.5);
-                }).ToList();
+                dilemmas = hotAll
+                    .OrderBy(IsExpired)
+                    .ThenByDescending(d =>
+                    {
+                        var votes = d.Options.Sum(o => o.Votes.Count);
+                        var ageHours = (DateTime.UtcNow - d.CreatedAt).TotalHours;
+                        return votes / Math.Pow(ageHours + 2, 1.5);
+                    })
+                    .ToList();
                 break;
 
             default: // "all" — newest first
-                dilemmas = await query.OrderByDescending(d => d.CreatedAt).ToListAsync();
+                dilemmas = await query
+                    .OrderBy(d => d.ExpiresAt != null && d.ExpiresAt < DateTime.UtcNow)
+                    .ThenByDescending(d => d.CreatedAt)
+                    .ToListAsync();
                 break;
         }
     }
@@ -302,6 +316,7 @@
                 CreatedAt = DateTime.UtcNow
             });
             await Db.SaveChangesAsync();
+            await BadgeNotifier.NotifyAsync();
         }
         reportedDilemmaIds.Add(dilemmaId);
         reportingDilemmaId = null;
@@ -517,6 +532,7 @@
         margin-left: auto;
         color: #e06c75;
         font-weight: 600;
+        font-size: 0.78rem;
     }
 
     .loading, .empty-state {

@@ -1,69 +1,77 @@
 @page "/register"
 @using System.ComponentModel.DataAnnotations
+@using System.Web
 @using Microsoft.AspNetCore.Identity
 @using VerdictApp.Data
+@using VerdictApp.Services
 @inject UserManager<ApplicationUser> UserManager
 @inject SignInManager<ApplicationUser> SignInManager
 @inject NavigationManager Nav
-@inject AuthenticationStateProvider AuthStateProvider
+@inject VerdictApp.Services.SupabaseAuthService SupabaseAuth
+@inject VerdictApp.Services.EmailSender EmailSender
 
-<PageTitle>Register</PageTitle>
-<h3>Register</h3>
+<PageTitle>Register — Verdict</PageTitle>
 
-@if (isAuthed)
-{
-    <p>You're already signed in.</p>
-    <a href="/">Go home</a>
-}
-else
-{
-    <EditForm Model="@model" OnValidSubmit="@HandleRegister" FormName="RegisterForm">
-        <DataAnnotationsValidator />
-        <ValidationSummary />
+<div class="auth-page">
+    <div class="auth-card">
+        <div class="auth-logo">⚖</div>
+        <h1 class="auth-title">Create account</h1>
 
-        <div style="margin-bottom:8px;">
-            <label>Email</label><br />
-            <InputText @bind-Value="model.Email" class="form-control" style="width:300px;" />
-        </div>
-
-        <div style="margin-bottom:8px;">
-            <label>Username</label><br />
-            <InputText @bind-Value="model.DisplayName" class="form-control" style="width:300px;" />
-        </div>
-
-        <div style="margin-bottom:8px;">
-            <label>Password</label><br />
-            <div style="position:relative; width:300px;">
-                <InputText type="@PasswordInputType"
-                           @bind-Value="model.Password"
-                           class="form-control"
-                           style="padding-right:30px;" />
-                <button type="button"
-                        style="position:absolute; right:0px; top:50%; transform:translateY(-50%); background:transparent; border:none;"
-                        @onclick="TogglePassword">
-                    <img src="@EyeIcon" width="20" />
-                </button>
+        @if (registrationComplete)
+        {
+            <div class="email-sent-box">
+                <div class="email-sent-icon">📧</div>
+                <h2>Check your inbox</h2>
+                <p>We sent a confirmation link to <strong>@confirmedEmail</strong>.</p>
+                <p class="email-hint">Click the link in the email to activate your account, then log in.</p>
+                <a class="back-to-login" href="/login">Go to login →</a>
             </div>
-        </div>
+        }
+        else
+        {
+            <EditForm Model="@model" OnValidSubmit="@HandleRegister" FormName="RegisterForm">
+                <DataAnnotationsValidator />
+                <ValidationSummary class="validation-summary" />
 
-        <div style="margin-bottom:8px;">
-            <label>Confirm Password</label><br />
-            <InputText type="password" @bind-Value="model.ConfirmPassword" class="form-control" style="width:300px;" />
-        </div>
+                <div class="form-field">
+                    <label>Email</label>
+                    <InputText @bind-Value="model.Email" class="form-input" placeholder="you@example.com" />
+                </div>
 
-        <button type="submit" disabled="@isBusy">Create account</button>
-    </EditForm>
+                <div class="form-field">
+                    <label>Username</label>
+                    <InputText @bind-Value="model.DisplayName" class="form-input" placeholder="Choose a display name" />
+                </div>
 
-    @if (!string.IsNullOrWhiteSpace(error))
-    {
-        <p style="color:red">@error</p>
-    }
-}
+                <div class="form-field">
+                    <label>Password</label>
+                    <div class="password-wrap">
+                        <InputText type="@PasswordInputType" @bind-Value="model.Password" class="form-input" placeholder="Min 8 characters" />
+                        <button type="button" class="eye-btn" @onclick="TogglePassword">
+                            <img src="@EyeIcon" width="20" />
+                        </button>
+                    </div>
+                </div>
 
-<p>
-    Already have an account?
-    <a href="/login">Login</a>
-</p>
+                <div class="form-field">
+                    <label>Confirm password</label>
+                    <InputText type="password" @bind-Value="model.ConfirmPassword" class="form-input" placeholder="Repeat your password" />
+                </div>
+
+                @if (!string.IsNullOrWhiteSpace(error))
+                {
+                    <p class="auth-error">@error</p>
+                }
+
+                <button type="submit" class="auth-btn" disabled="@isBusy">
+                    @(isBusy ? "Creating account…" : "Create account")
+                </button>
+            </EditForm>
+
+            <p class="auth-switch">Already have an account? <a href="/login">Log in</a></p>
+        }
+    </div>
+</div>
 
 @code {
     [SupplyParameterFromForm(FormName = "RegisterForm")]
@@ -71,27 +79,26 @@ else
 
     private string? error;
     private bool isBusy;
-    private bool isAuthed;
-    bool showPassword = false;
-    string PasswordInputType => showPassword ? "text" : "password";
-    string EyeIcon => showPassword ? "icons/hide.png" : "icons/view.png";
-    void TogglePassword() => showPassword = !showPassword;
+    private bool registrationComplete;
+    private string confirmedEmail = "";
+    private bool showPassword;
+    private string PasswordInputType => showPassword ? "text" : "password";
+    private string EyeIcon => showPassword ? "icons/hide.png" : "icons/view.png";
+    private void TogglePassword() => showPassword = !showPassword;
 
     private async Task HandleRegister()
     {
         error = null;
         isBusy = true;
 
-        var emailTaken = await UserManager.FindByEmailAsync(model.Email) != null;
-        if (emailTaken)
+        if (await UserManager.FindByEmailAsync(model.Email) != null)
         {
             error = "An account with that email already exists.";
             isBusy = false;
             return;
         }
 
-        var usernameTaken = UserManager.Users.Any(u => u.DisplayName.ToLower() == model.DisplayName.ToLower());
-        if (usernameTaken)
+        if (UserManager.Users.Any(u => u.DisplayName != null && u.DisplayName.ToLower() == model.DisplayName.ToLower()))
         {
             error = "That username is already taken.";
             isBusy = false;
@@ -102,19 +109,67 @@ else
         {
             UserName = model.Email,
             Email = model.Email,
-            DisplayName = model.DisplayName  // add this
+            DisplayName = model.DisplayName
         };
 
         var result = await UserManager.CreateAsync(user, model.Password);
         if (!result.Succeeded)
         {
-            error = string.Join(" | ", result.Errors.Select(e => e.Description));
+            error = string.Join(" ", result.Errors.Select(e => e.Description));
             isBusy = false;
             return;
         }
 
-        await SignInManager.SignInAsync(user, isPersistent: true);
-        Nav.NavigateTo("/");
+        if (SupabaseAuth.IsConfigured)
+        {
+            // Supabase Auth — triggers confirmation email automatically
+            try
+            {
+                var confirmUrl = $"{Nav.BaseUri}auth/confirm";
+                await SupabaseAuth.SignUpAsync(model.Email, model.Password, confirmUrl);
+            }
+            catch (Exception ex)
+            {
+                await UserManager.DeleteAsync(user);
+                error = $"Could not send confirmation email: {ex.Message}";
+                isBusy = false;
+                return;
+            }
+
+            confirmedEmail = model.Email;
+            registrationComplete = true;
+            isBusy = false;
+        }
+        else if (EmailSender.IsConfigured)
+        {
+            // Fallback: custom SMTP
+            try
+            {
+                var token = await UserManager.GenerateEmailConfirmationTokenAsync(user);
+                var encoded = HttpUtility.UrlEncode(token);
+                var link = $"{Nav.BaseUri}account/confirm-email?userId={user.Id}&token={encoded}";
+                await EmailSender.SendConfirmationLinkAsync(user, user.Email!, link);
+            }
+            catch (Exception ex)
+            {
+                await UserManager.DeleteAsync(user);
+                error = $"Could not send confirmation email: {ex.Message}";
+                isBusy = false;
+                return;
+            }
+
+            confirmedEmail = model.Email;
+            registrationComplete = true;
+            isBusy = false;
+        }
+        else
+        {
+            // Neither configured (dev mode) — auto-confirm and sign in
+            var token = await UserManager.GenerateEmailConfirmationTokenAsync(user);
+            await UserManager.ConfirmEmailAsync(user, token);
+            await SignInManager.SignInAsync(user, isPersistent: true);
+            Nav.NavigateTo("/");
+        }
     }
 
     public class RegisterModel
@@ -124,13 +179,141 @@ else
 
         [Required]
         [Display(Name = "Username")]
-        [MinLength(3, ErrorMessage = "Username must be at least 3 characters")]
+        [MinLength(3, ErrorMessage = "Username must be at least 3 characters.")]
         public string DisplayName { get; set; } = "";
 
-        [Required, MinLength(8)]
+        [Required, MinLength(8, ErrorMessage = "Password must be at least 8 characters.")]
         public string Password { get; set; } = "";
 
-        [Required, Compare(nameof(Password))]
+        [Required, Compare(nameof(Password), ErrorMessage = "Passwords do not match.")]
         public string ConfirmPassword { get; set; } = "";
     }
 }
+
+<style>
+    .auth-page {
+        min-height: 80vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem 1rem;
+        font-family: Georgia, serif;
+    }
+
+    .auth-card {
+        width: 100%;
+        max-width: 400px;
+        background: white;
+        border: 1px solid #e8e8e8;
+        border-radius: 16px;
+        padding: 2.5rem 2rem;
+        box-shadow: 0 4px 24px rgba(0,0,0,0.06);
+    }
+
+    .auth-logo { font-size: 2rem; text-align: center; margin-bottom: 0.5rem; }
+
+    .auth-title {
+        text-align: center;
+        font-size: 1.5rem;
+        margin: 0 0 1.75rem;
+        color: #052767;
+    }
+
+    .form-field {
+        display: flex;
+        flex-direction: column;
+        gap: 0.3rem;
+        margin-bottom: 1rem;
+    }
+
+    .form-field label {
+        font-size: 0.88rem;
+        font-weight: 600;
+        color: #333;
+    }
+
+    .form-input {
+        padding: 0.6rem 0.85rem;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        font-size: 0.95rem;
+        font-family: Georgia, serif;
+        width: 100%;
+        box-sizing: border-box;
+        transition: border-color 0.15s;
+    }
+
+    .form-input:focus { outline: none; border-color: #052767; }
+
+    .password-wrap { position: relative; }
+    .password-wrap .form-input { padding-right: 2.5rem; }
+
+    .eye-btn {
+        position: absolute;
+        right: 0.5rem;
+        top: 50%;
+        transform: translateY(-50%);
+        background: none;
+        border: none;
+        cursor: pointer;
+        padding: 0;
+        line-height: 1;
+    }
+
+    .auth-btn {
+        width: 100%;
+        padding: 0.75rem;
+        background: #052767;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-size: 1rem;
+        font-family: Georgia, serif;
+        cursor: pointer;
+        margin-top: 0.5rem;
+        transition: background 0.15s;
+    }
+
+    .auth-btn:hover:not(:disabled) { background: #3a0647; }
+    .auth-btn:disabled { background: #aaa; cursor: not-allowed; }
+
+    .auth-error {
+        color: #c0392b;
+        font-size: 0.85rem;
+        margin: 0 0 0.5rem;
+        padding: 0.5rem 0.75rem;
+        background: #fdf2f2;
+        border-radius: 6px;
+        border-left: 3px solid #c0392b;
+    }
+
+    .auth-switch {
+        text-align: center;
+        font-size: 0.88rem;
+        color: #888;
+        margin: 1rem 0 0;
+    }
+
+    .auth-switch a { color: #052767; text-decoration: none; font-weight: 600; }
+    .auth-switch a:hover { text-decoration: underline; }
+
+    .validation-summary { color: #c0392b; font-size: 0.85rem; margin-bottom: 0.75rem; }
+
+    /* Email sent state */
+    .email-sent-box { text-align: center; padding: 1rem 0; }
+    .email-sent-icon { font-size: 3rem; margin-bottom: 1rem; }
+    .email-sent-box h2 { margin: 0 0 0.75rem; color: #052767; }
+    .email-sent-box p { color: #555; font-size: 0.95rem; margin: 0 0 0.5rem; line-height: 1.55; }
+    .email-hint { color: #888; font-size: 0.85rem !important; }
+
+    .back-to-login {
+        display: inline-block;
+        margin-top: 1.25rem;
+        color: #052767;
+        font-weight: 600;
+        text-decoration: none;
+        font-size: 0.95rem;
+    }
+
+    .back-to-login:hover { text-decoration: underline; }
+</style>

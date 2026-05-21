@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using VerdictApp.Data;
 using Microsoft.AspNetCore.Mvc;
 using VerdictApp.Services;
+using System.Web;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -23,7 +24,7 @@ builder.Services
         options =>
         {
             options.User.RequireUniqueEmail = true;
-            // options.SignIn.RequireConfirmedEmail = true;P12
+            options.SignIn.RequireConfirmedEmail = true;
         }
     )
     .AddEntityFrameworkStores<ApplicationDbContext>()
@@ -39,6 +40,11 @@ builder.Services.AddScoped<NotificationService>();
 builder.Services.AddHostedService<ExpiryNotificationService>();
 builder.Services.AddSingleton<RecentGroupsNotifier>();
 builder.Services.AddSingleton<BadgeNotifier>();
+builder.Services.AddTransient<EmailSender>();
+builder.Services.AddTransient<IEmailSender<ApplicationUser>>(sp => sp.GetRequiredService<EmailSender>());
+builder.Services.AddTransient<SupabaseAuthService>();
+builder.Services.AddSingleton<FounderService>();
+builder.Services.AddHttpClient();
 builder.Services.AddAntiforgery();
 builder.Services.AddRazorPages();
 
@@ -63,6 +69,109 @@ app.MapRazorComponents<App>()
 app.UseStaticFiles();
 // Logout endpoint: perform SignOut on the server and redirect to login.
 // We expose a simple GET endpoint so components can navigate to it with forceLoad to clear the cookie.
+// Supabase email confirmation callback
+// Supabase redirects here after the user clicks the link in the confirmation email.
+// Newer Supabase sends token_hash as a query param; older sends tokens in the URL hash (handled client-side).
+app.MapGet("/auth/confirm", async (
+    string? token_hash, string? type,
+    UserManager<ApplicationUser> userManager,
+    SignInManager<ApplicationUser> signInManager,
+    SupabaseAuthService supabase,
+    HttpContext http) =>
+{
+    if (string.IsNullOrEmpty(token_hash))
+    {
+        // Hash-fragment fallback — JS extracts access_token from the URL hash
+        return Results.Content("""
+            <!doctype html><html><body><script>
+            var h = window.location.hash.substring(1);
+            var p = new URLSearchParams(h);
+            var token = p.get('access_token');
+            if (token) {
+                fetch('/auth/confirm-token?access_token=' + encodeURIComponent(token))
+                    .then(r => r.json())
+                    .then(d => window.location.href = d.redirect);
+            } else { window.location.href = '/login?error=confirm'; }
+            </script></body></html>
+            """, "text/html");
+    }
+
+    var email = await supabase.VerifyTokenHashAsync(token_hash, type ?? "email");
+    if (email == null) return Results.Redirect("/login?error=confirm");
+
+    var user = await userManager.FindByEmailAsync(email);
+    if (user == null) return Results.Redirect("/login?error=confirm");
+
+    if (!user.EmailConfirmed)
+    {
+        user.EmailConfirmed = true;
+        await userManager.UpdateAsync(user);
+    }
+
+    // Sign the user in immediately so they land on /verified already authenticated
+    await signInManager.SignInAsync(user, isPersistent: true);
+    return Results.Redirect("/verified");
+});
+
+// Handles the hash-fragment fallback — receives access_token posted by the JS above
+app.MapGet("/auth/confirm-token", async (
+    string access_token,
+    UserManager<ApplicationUser> userManager,
+    SignInManager<ApplicationUser> signInManager,
+    SupabaseAuthService supabase,
+    HttpContext http) =>
+{
+    var email = await supabase.GetEmailFromAccessTokenAsync(access_token);
+    if (email != null)
+    {
+        var user = await userManager.FindByEmailAsync(email);
+        if (user != null)
+        {
+            if (!user.EmailConfirmed)
+            {
+                user.EmailConfirmed = true;
+                await userManager.UpdateAsync(user);
+            }
+            await signInManager.SignInAsync(user, isPersistent: true);
+        }
+    }
+    var redirect = email != null ? "/verified" : "/login?error=confirm";
+    return Results.Json(new { redirect });
+});
+
+// Legacy Identity email confirmation (kept for existing unconfirmed accounts)
+app.MapGet("/account/confirm-email", async (
+    string userId, string token,
+    UserManager<ApplicationUser> userManager) =>
+{
+    var user = await userManager.FindByIdAsync(userId);
+    if (user == null) return Results.Redirect("/login?error=confirm");
+    var decoded = HttpUtility.UrlDecode(token);
+    var result = await userManager.ConfirmEmailAsync(user, decoded);
+    return result.Succeeded
+        ? Results.Redirect("/login?confirmed=true")
+        : Results.Redirect("/login?error=confirm");
+});
+
+// Resend confirmation email endpoint
+app.MapGet("/account/resend-confirmation", async (
+    string email,
+    UserManager<ApplicationUser> userManager,
+    IEmailSender<ApplicationUser> emailSender,
+    HttpRequest request) =>
+{
+    var user = await userManager.FindByEmailAsync(email);
+    if (user == null || user.EmailConfirmed)
+        return Results.Redirect("/login");
+
+    var token = await userManager.GenerateEmailConfirmationTokenAsync(user);
+    var encoded = HttpUtility.UrlEncode(token);
+    var baseUrl = $"{request.Scheme}://{request.Host}";
+    var link = $"{baseUrl}/account/confirm-email?userId={user.Id}&token={encoded}";
+    await emailSender.SendConfirmationLinkAsync(user, user.Email!, link);
+    return Results.Redirect("/login?resent=true");
+});
+
 app.MapGet("/account/logout", async (SignInManager<ApplicationUser> signInManager, HttpContext http) =>
 {
     // Perform sign-out server-side and return an explicit redirect result.
@@ -162,10 +271,16 @@ using (var scope = app.Services.CreateScope())
         {
             UserName = email,
             Email = email,
-            DisplayName = "TestUser"
+            DisplayName = "TestUser",
+            EmailConfirmed = true
         };
-
         await userManager.CreateAsync(user, "Password123!");
+    }
+    else if (!existing.EmailConfirmed)
+    {
+        // Ensure the seeded test user is always confirmed
+        existing.EmailConfirmed = true;
+        await userManager.UpdateAsync(existing);
     }
 }
 

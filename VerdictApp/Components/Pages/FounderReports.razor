@@ -1,0 +1,361 @@
+@page "/founder/reports"
+@rendermode InteractiveServer
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.EntityFrameworkCore
+@using System.Security.Claims
+@using VerdictApp.Data
+@using VerdictApp.Models
+@inject AuthenticationStateProvider AuthStateProvider
+@inject UserManager<ApplicationUser> UserManager
+@inject ApplicationDbContext Db
+@inject NavigationManager Nav
+@inject VerdictApp.Services.FounderService FounderSvc
+@inject VerdictApp.Services.BadgeNotifier BadgeNotifier
+
+<PageTitle>Reports — Founder</PageTitle>
+
+@if (!isFounder)
+{
+    <p class="loading">Access denied.</p>
+}
+else
+{
+    <div class="founder-page">
+        <div class="founder-header">
+            <div>
+                <h1>⚑ Reports</h1>
+                <p>Review flagged posts and comments.</p>
+            </div>
+            <span class="report-count-badge">@reportViews.Count pending</span>
+        </div>
+
+        @if (successMessage != null)
+        {
+            <div class="banner success">@successMessage</div>
+        }
+
+        @if (!reportViews.Any())
+        {
+            <div class="empty-reports">
+                <p>🎉 No reports to review. The community is behaving itself.</p>
+            </div>
+        }
+        else
+        {
+            @foreach (var r in reportViews)
+            {
+                <div class="report-card">
+                    <div class="report-top">
+                        <span class="report-type-badge @(r.IsPost ? "post" : "comment")">
+                            @(r.IsPost ? "Post" : "Comment")
+                        </span>
+                        <span class="report-reason">🚩 @ReasonLabel(r.Reason)</span>
+                        <span class="report-meta">Reported by <strong>@r.ReporterName</strong> · @FormatAge(r.CreatedAt)</span>
+                    </div>
+
+                    <div class="report-content">
+                        @if (r.IsPost)
+                        {
+                            <a class="report-title" href="/dilemma/@r.DilemmaId" target="_blank">
+                                @r.Title
+                            </a>
+                            <p class="report-author">by @r.ContentAuthor</p>
+                        }
+                        else
+                        {
+                            <p class="report-body">@r.Body</p>
+                            <p class="report-author">
+                                by @r.ContentAuthor ·
+                                <a href="/dilemma/@r.DilemmaId" target="_blank">View post</a>
+                            </p>
+                        }
+                    </div>
+
+                    <div class="report-actions">
+                        <button class="action-btn danger" @onclick="() => DeleteContent(r)" disabled="@isBusy">
+                            🗑️ Delete @(r.IsPost ? "post" : "comment")
+                        </button>
+                        <button class="action-btn neutral" @onclick="() => DismissReport(r.ReportId)" disabled="@isBusy">
+                            ✓ Dismiss report
+                        </button>
+                    </div>
+                </div>
+            }
+        }
+    </div>
+}
+
+@code {
+    private bool isFounder;
+    private bool isBusy;
+    private string? successMessage;
+    private List<ReportView> reportViews = new();
+
+    private record ReportView(
+        Guid ReportId,
+        bool IsPost,
+        string Reason,
+        DateTime CreatedAt,
+        string ReporterName,
+        Guid? DilemmaId,
+        Guid? CommentId,
+        string? Title,
+        string? Body,
+        string ContentAuthor
+    );
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = await UserManager.GetUserAsync(authState.User);
+        if (user == null || !FounderSvc.IsFounder(user.Email))
+        {
+            Nav.NavigateTo("/");
+            return;
+        }
+        isFounder = true;
+        await LoadReports();
+    }
+
+    private async Task LoadReports()
+    {
+        var reports = await Db.Reports.OrderByDescending(r => r.CreatedAt).ToListAsync();
+
+        var dilemmaIds = reports.Where(r => r.DilemmaId.HasValue).Select(r => r.DilemmaId!.Value).Distinct().ToList();
+        var commentIds = reports.Where(r => r.CommentId.HasValue).Select(r => r.CommentId!.Value).Distinct().ToList();
+        var reporterIds = reports.Select(r => r.ReporterUserId).Distinct().ToList();
+
+        var dilemmas = await Db.Dilemmas.Include(d => d.User)
+            .Where(d => dilemmaIds.Contains(d.Id)).ToDictionaryAsync(d => d.Id);
+        var comments = await Db.Comments.Include(c => c.User).Include(c => c.Dilemma)
+            .Where(c => commentIds.Contains(c.Id)).ToDictionaryAsync(c => c.Id);
+        var reporters = await Db.Users
+            .Where(u => reporterIds.Contains(u.Id))
+            .ToDictionaryAsync(u => u.Id, u => u.DisplayName ?? u.UserName ?? "Unknown");
+
+        reportViews = reports.Select(r =>
+        {
+            var reporterName = reporters.GetValueOrDefault(r.ReporterUserId, "Unknown");
+
+            if (r.DilemmaId.HasValue && dilemmas.TryGetValue(r.DilemmaId.Value, out var d))
+                return new ReportView(r.Id, true, r.Reason, r.CreatedAt, reporterName,
+                    d.Id, null, d.Title,null,
+                    d.User?.DisplayName ?? d.User?.UserName ?? "Unknown");
+
+            if (r.CommentId.HasValue && comments.TryGetValue(r.CommentId.Value, out var c))
+                return new ReportView(r.Id, false, r.Reason, r.CreatedAt, reporterName,
+                    c.DilemmaId, c.Id, null, c.Body,
+                    c.User?.DisplayName ?? c.User?.UserName ?? "Unknown");
+
+            return null;
+        }).Where(r => r != null).Cast<ReportView>().ToList();
+    }
+
+    private async Task DeleteContent(ReportView r)
+    {
+        isBusy = true;
+        if (r.IsPost && r.DilemmaId.HasValue)
+        {
+            var dilemma = await Db.Dilemmas.FindAsync(r.DilemmaId.Value);
+            if (dilemma != null) Db.Dilemmas.Remove(dilemma);
+            // Remove all reports for this post
+            var related = Db.Reports.Where(x => x.DilemmaId == r.DilemmaId.Value);
+            Db.Reports.RemoveRange(related);
+        }
+        else if (!r.IsPost && r.CommentId.HasValue)
+        {
+            var comment = await Db.Comments.FindAsync(r.CommentId.Value);
+            if (comment != null) Db.Comments.Remove(comment);
+            var related = Db.Reports.Where(x => x.CommentId == r.CommentId.Value);
+            Db.Reports.RemoveRange(related);
+        }
+        await Db.SaveChangesAsync();
+        await BadgeNotifier.NotifyAsync();
+        await ShowSuccess(r.IsPost ? "Post deleted." : "Comment deleted.");
+        await LoadReports();
+        isBusy = false;
+    }
+
+    private async Task DismissReport(Guid reportId)
+    {
+        isBusy = true;
+        var report = await Db.Reports.FindAsync(reportId);
+        if (report != null) Db.Reports.Remove(report);
+        await Db.SaveChangesAsync();
+        await BadgeNotifier.NotifyAsync();
+        await ShowSuccess("Report dismissed.");
+        await LoadReports();
+        isBusy = false;
+    }
+
+    private async Task ShowSuccess(string msg)
+    {
+        successMessage = msg;
+        StateHasChanged();
+        await Task.Delay(2500);
+        successMessage = null;
+    }
+
+    private static string ReasonLabel(string reason) => reason switch
+    {
+        "spam"          => "Spam or misleading",
+        "inappropriate" => "Inappropriate content",
+        "harassment"    => "Harassment or hate speech",
+        _               => "Other"
+    };
+
+    private static string FormatAge(DateTime dt)
+    {
+        var diff = DateTime.UtcNow - dt;
+        if (diff.TotalMinutes < 1)  return "just now";
+        if (diff.TotalHours   < 1)  return $"{(int)diff.TotalMinutes}m ago";
+        if (diff.TotalDays    < 1)  return $"{(int)diff.TotalHours}h ago";
+        if (diff.TotalDays    < 7)  return $"{(int)diff.TotalDays}d ago";
+        return dt.ToString("MMM d, yyyy");
+    }
+}
+
+<style>
+    .founder-page {
+        max-width: 760px;
+        margin: 2rem auto;
+        padding: 0 1rem 3rem;
+        font-family: Georgia, serif;
+    }
+
+    .founder-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        margin-bottom: 1.75rem;
+    }
+
+    .founder-header h1 { margin: 0 0 0.25rem; font-size: 1.8rem; color: #052767; }
+    .founder-header p  { margin: 0; color: #888; font-size: 0.9rem; }
+
+    .report-count-badge {
+        background: #052767;
+        color: white;
+        border-radius: 20px;
+        padding: 0.3rem 0.9rem;
+        font-size: 0.82rem;
+        font-weight: 600;
+        white-space: nowrap;
+        margin-top: 0.25rem;
+    }
+
+    .banner.success {
+        background: #e8f5e9;
+        color: #2e7d32;
+        border: 1px solid #a5d6a7;
+        border-radius: 8px;
+        padding: 0.65rem 1rem;
+        margin-bottom: 1rem;
+        font-size: 0.9rem;
+    }
+
+    .empty-reports {
+        text-align: center;
+        padding: 3rem 0;
+        color: #aaa;
+        font-style: italic;
+    }
+
+    .report-card {
+        border: 1px solid #e8e8e8;
+        border-radius: 12px;
+        padding: 1.25rem;
+        margin-bottom: 1rem;
+        background: white;
+    }
+
+    .report-top {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        flex-wrap: wrap;
+        margin-bottom: 0.85rem;
+    }
+
+    .report-type-badge {
+        font-size: 0.72rem;
+        font-weight: 700;
+        padding: 2px 8px;
+        border-radius: 20px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+
+    .report-type-badge.post    { background: #e8f0fe; color: #1a56db; }
+    .report-type-badge.comment { background: #fef3c7; color: #92400e; }
+
+    .report-reason {
+        font-size: 0.85rem;
+        color: #c0392b;
+        font-weight: 600;
+    }
+
+    .report-meta {
+        font-size: 0.8rem;
+        color: #aaa;
+        margin-left: auto;
+    }
+
+    .report-content {
+        margin-bottom: 1rem;
+        padding: 0.75rem 1rem;
+        background: #f8f9fc;
+        border-radius: 8px;
+        border-left: 3px solid #dce6ff;
+    }
+
+    .report-title {
+        font-size: 1rem;
+        font-weight: 700;
+        color: #052767;
+        text-decoration: none;
+        display: block;
+        margin-bottom: 0.2rem;
+    }
+
+    .report-title:hover { text-decoration: underline; }
+
+    .report-body {
+        font-size: 0.9rem;
+        color: #333;
+        margin: 0 0 0.3rem;
+        line-height: 1.5;
+    }
+
+    .report-author {
+        font-size: 0.78rem;
+        color: #aaa;
+        margin: 0;
+    }
+
+    .report-author a { color: #052767; text-decoration: none; }
+    .report-author a:hover { text-decoration: underline; }
+
+    .report-actions {
+        display: flex;
+        gap: 0.6rem;
+    }
+
+    .action-btn {
+        padding: 0.45rem 1rem;
+        border-radius: 8px;
+        border: none;
+        font-size: 0.85rem;
+        font-family: Georgia, serif;
+        cursor: pointer;
+        transition: all 0.15s;
+    }
+
+    .action-btn.danger  { background: #fef2f2; color: #c0392b; border: 1px solid #fca5a5; }
+    .action-btn.neutral { background: #f0f4ff; color: #052767; border: 1px solid #c5d0ee; }
+    .action-btn.danger:hover  { background: #fee2e2; }
+    .action-btn.neutral:hover { background: #dce6ff; }
+    .action-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .loading { text-align: center; padding: 3rem; color: #aaa; }
+</style>

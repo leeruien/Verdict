@@ -9,6 +9,7 @@
 @inject ApplicationDbContext Db
 @inject NavigationManager Nav
 @inject IJSRuntime JS
+@inject VerdictApp.Services.BadgeNotifier BadgeNotifier
 @inject VerdictApp.Services.RecentGroupsNotifier RecentNotifier
 
 @{
@@ -289,6 +290,7 @@ else
                 CreatedAt = DateTime.UtcNow
             });
             await Db.SaveChangesAsync();
+            await BadgeNotifier.NotifyAsync();
         }
         reportedDilemmaIds.Add(dilemmaId);
         reportingDilemmaId = null;

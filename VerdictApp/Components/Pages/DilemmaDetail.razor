@@ -12,6 +12,7 @@
 @inject VerdictApp.Services.NotificationService NotificationSvc
 @inject IJSRuntime JS
 @inject VerdictApp.Services.RecentGroupsNotifier RecentNotifier
+@inject VerdictApp.Services.BadgeNotifier BadgeNotifier
 
 @if (dilemma == null)
 {
@@ -523,6 +524,7 @@ else
                 CreatedAt = DateTime.UtcNow
             });
             await Db.SaveChangesAsync();
+            await BadgeNotifier.NotifyAsync();
         }
         postAlreadyReported = true;
         showReportPost = false;
@@ -544,6 +546,7 @@ else
                 CreatedAt = DateTime.UtcNow
             });
             await Db.SaveChangesAsync();
+            await BadgeNotifier.NotifyAsync();
         }
         reportedCommentIds.Add(commentId);
         reportingCommentId = null;

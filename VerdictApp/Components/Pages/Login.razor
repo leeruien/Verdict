@@ -5,70 +5,127 @@
 @inject SignInManager<ApplicationUser> SignInManager
 @inject NavigationManager Nav
 
-<PageTitle>Login</PageTitle>
+<PageTitle>Login — Verdict</PageTitle>
 
-<h3>Login</h3>
+<div class="auth-page">
+    <div class="auth-card">
+        <div class="auth-logo">⚖</div>
+        <h1 class="auth-title">Welcome back</h1>
 
-<EditForm Model="@model" OnValidSubmit="@HandleLogin" FormName="LoginForm">
-    <DataAnnotationsValidator />
-    <ValidationSummary />
+        @if (showConfirmedBanner)
+        {
+            <div class="banner success">✅ Email confirmed! You can now log in.</div>
+        }
+        @if (showResentBanner)
+        {
+            <div class="banner success">📧 Confirmation email resent — check your inbox.</div>
+        }
+        @if (showConfirmError)
+        {
+            <div class="banner error">The confirmation link is invalid or expired. <a href="#" @onclick="ShowResend" @onclick:preventDefault>Resend a new one</a>.</div>
+        }
+        @if (notConfirmed)
+        {
+            <div class="banner warning">
+                Your email isn't verified yet.
+                <a href="/account/resend-confirmation?email=@Uri.EscapeDataString(model.Email)">Resend confirmation email</a>
+            </div>
+        }
 
-    <div style="margin-bottom:8px;">
-        <label>Email</label><br />
-        <InputText @bind-Value="model.Email" class="form-control"style="width:300px;" />
-    </div>
+        <EditForm Model="@model" OnValidSubmit="@HandleLogin" FormName="LoginForm">
+            <DataAnnotationsValidator />
 
-    <div style="margin-bottom:8px;">
-        <label>Password</label><br />
-        <div style="position:relative; width:300px;">
-            <InputText type="@passwordInputType" @bind-Value="model.Password" class="form-control"style="width:300px; padding-right:30px;" />
-            <button type="button" @onclick="TogglePassword" style="position:absolute; right:0px; top:50%; transform:translateY(-50%); background:transparent; border:none;">
-                <img src="@(showPassword ? "icons/hide.png" : "icons/view.png")" width="20" />
+            <div class="form-field">
+                <label>Email</label>
+                <InputText @bind-Value="model.Email" class="form-input" placeholder="you@example.com" />
+            </div>
+
+            <div class="form-field">
+                <label>Password</label>
+                <div class="password-wrap">
+                    <InputText type="@passwordInputType" @bind-Value="model.Password" class="form-input" placeholder="Your password" />
+                    <button type="button" class="eye-btn" @onclick="TogglePassword">
+                        <img src="@(showPassword ? "icons/hide.png" : "icons/view.png")" width="20" />
+                    </button>
+                </div>
+            </div>
+
+            <div class="remember-row">
+                <InputCheckbox @bind-Value="model.RememberMe" id="rememberMe" />
+                <label for="rememberMe">Remember me</label>
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(error))
+            {
+                <p class="auth-error">@error</p>
+            }
+
+            <button type="submit" class="auth-btn" disabled="@isBusy">
+                @(isBusy ? "Logging in…" : "Log in")
             </button>
-        </div>
+        </EditForm>
+
+        @if (showResendForm)
+        {
+            <div class="resend-box">
+                <p>Enter your email to receive a new confirmation link:</p>
+                <div class="resend-row">
+                    <input class="form-input" @bind="resendEmail" placeholder="you@example.com" />
+                    <a class="resend-btn" href="/account/resend-confirmation?email=@Uri.EscapeDataString(resendEmail)">Send</a>
+                </div>
+            </div>
+        }
+
+        <p class="auth-switch">No account? <a href="/register">Register</a></p>
     </div>
-
-    <div style="margin-bottom:12px;">
-        <InputCheckbox @bind-Value="model.RememberMe" />
-        <label style="margin-left:6px;">Remember me</label>
-    </div>
-
-    <button type="submit" disabled="@isBusy">Login</button>
-</EditForm>
-
-@if (!string.IsNullOrWhiteSpace(error))
-{
-    <p style="color:red">@error</p>
-}
-
-<p>
-    No account?
-    <a href="/register">Register</a>
-</p>
+</div>
 
 @code {
     [SupplyParameterFromForm(FormName = "LoginForm")]
-    public LoginModel model { get; set;} = new();
+    public LoginModel model { get; set; } = new();
+
     private string? error;
     private bool isBusy;
-    private bool showPassword = false;
+    private bool showPassword;
+    private bool notConfirmed;
+    private bool showConfirmedBanner;
+    private bool showResentBanner;
+    private bool showConfirmError;
+    private bool showResendForm;
+    private string resendEmail = "";
     private string passwordInputType => showPassword ? "text" : "password";
     private void TogglePassword() => showPassword = !showPassword;
+    private void ShowResend() { showResendForm = true; showConfirmError = false; }
+
+    protected override void OnInitialized()
+    {
+        var uri = new Uri(Nav.Uri);
+        var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
+        showConfirmedBanner = query["confirmed"] == "true";
+        showResentBanner    = query["resent"]    == "true";
+        showConfirmError    = query["error"]     == "confirm";
+    }
 
     private async Task HandleLogin()
     {
         error = null;
+        notConfirmed = false;
         isBusy = true;
 
         var result = await SignInManager.PasswordSignInAsync(
-            model.Email,
-            model.Password,
+            model.Email, model.Password,
             isPersistent: model.RememberMe,
             lockoutOnFailure: false);
 
         if (result.Succeeded)
         {
             Nav.NavigateTo("/");
+            return;
+        }
+
+        if (result.IsNotAllowed)
+        {
+            notConfirmed = true;
         }
         else
         {
@@ -76,7 +133,6 @@
         }
 
         isBusy = false;
-
     }
 
     public class LoginModel
@@ -90,3 +146,161 @@
         public bool RememberMe { get; set; } = true;
     }
 }
+
+<style>
+    .auth-page {
+        min-height: 80vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem 1rem;
+        font-family: Georgia, serif;
+    }
+
+    .auth-card {
+        width: 100%;
+        max-width: 400px;
+        background: white;
+        border: 1px solid #e8e8e8;
+        border-radius: 16px;
+        padding: 2.5rem 2rem;
+        box-shadow: 0 4px 24px rgba(0,0,0,0.06);
+    }
+
+    .auth-logo { font-size: 2rem; text-align: center; margin-bottom: 0.5rem; }
+
+    .auth-title {
+        text-align: center;
+        font-size: 1.5rem;
+        margin: 0 0 1.75rem;
+        color: #052767;
+    }
+
+    .banner {
+        border-radius: 8px;
+        padding: 0.65rem 0.9rem;
+        font-size: 0.88rem;
+        margin-bottom: 1rem;
+        line-height: 1.5;
+    }
+
+    .banner.success { background: #e8f5e9; color: #2e7d32; border: 1px solid #a5d6a7; }
+    .banner.warning { background: #fff8e1; color: #7a5800; border: 1px solid #ffe082; }
+    .banner.error   { background: #fdf2f2; color: #c0392b; border: 1px solid #f5c6c6; }
+    .banner a { color: inherit; font-weight: 600; }
+
+    .form-field {
+        display: flex;
+        flex-direction: column;
+        gap: 0.3rem;
+        margin-bottom: 1rem;
+    }
+
+    .form-field label { font-size: 0.88rem; font-weight: 600; color: #333; }
+
+    .form-input {
+        padding: 0.6rem 0.85rem;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        font-size: 0.95rem;
+        font-family: Georgia, serif;
+        width: 100%;
+        box-sizing: border-box;
+        transition: border-color 0.15s;
+    }
+
+    .form-input:focus { outline: none; border-color: #052767; }
+
+    .password-wrap { position: relative; }
+    .password-wrap .form-input { padding-right: 2.5rem; }
+
+    .eye-btn {
+        position: absolute;
+        right: 0.5rem;
+        top: 50%;
+        transform: translateY(-50%);
+        background: none;
+        border: none;
+        cursor: pointer;
+        padding: 0;
+        line-height: 1;
+    }
+
+    .remember-row {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.88rem;
+        color: #555;
+        margin-bottom: 1rem;
+    }
+
+    .auth-btn {
+        width: 100%;
+        padding: 0.75rem;
+        background: #052767;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-size: 1rem;
+        font-family: Georgia, serif;
+        cursor: pointer;
+        transition: background 0.15s;
+    }
+
+    .auth-btn:hover:not(:disabled) { background: #3a0647; }
+    .auth-btn:disabled { background: #aaa; cursor: not-allowed; }
+
+    .auth-error {
+        color: #c0392b;
+        font-size: 0.85rem;
+        margin: 0 0 0.75rem;
+        padding: 0.5rem 0.75rem;
+        background: #fdf2f2;
+        border-radius: 6px;
+        border-left: 3px solid #c0392b;
+    }
+
+    .auth-switch {
+        text-align: center;
+        font-size: 0.88rem;
+        color: #888;
+        margin: 1rem 0 0;
+    }
+
+    .auth-switch a { color: #052767; text-decoration: none; font-weight: 600; }
+    .auth-switch a:hover { text-decoration: underline; }
+
+    .resend-box {
+        margin-top: 1rem;
+        padding: 0.85rem;
+        background: #f7f9ff;
+        border: 1px solid #dce6ff;
+        border-radius: 8px;
+        font-size: 0.88rem;
+        color: #444;
+    }
+
+    .resend-box p { margin: 0 0 0.6rem; }
+
+    .resend-row {
+        display: flex;
+        gap: 0.5rem;
+    }
+
+    .resend-row .form-input { flex: 1; padding: 0.45rem 0.75rem; font-size: 0.88rem; }
+
+    .resend-btn {
+        padding: 0.45rem 0.9rem;
+        background: #052767;
+        color: white;
+        border-radius: 6px;
+        text-decoration: none;
+        font-size: 0.85rem;
+        white-space: nowrap;
+        display: flex;
+        align-items: center;
+    }
+
+    .resend-btn:hover { background: #3a0647; }
+</style>

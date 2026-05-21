@@ -11,6 +11,7 @@
 @inject IJSRuntime JS
 @inject VerdictApp.Services.RecentGroupsNotifier RecentNotifier
 @inject VerdictApp.Services.BadgeNotifier BadgeNotifier
+@inject VerdictApp.Services.FounderService FounderSvc
 @implements IDisposable
 
 <div class="sidebar-nav">
@@ -57,6 +58,19 @@
                         }
                     </NavLink>
                 </div>
+                @if (isFounder)
+                {
+                    <div class="nav-item px-3">
+                        <NavLink class="nav-link founder-link" href="founder/reports">
+                            <span class="nav-icon">⚑</span>
+                            <span class="nav-label">Reports</span>
+                            @if (pendingReportCount > 0)
+                            {
+                                <span class="nav-count">@pendingReportCount</span>
+                            }
+                        </NavLink>
+                    </div>
+                }
             </Authorized>
 
             <NotAuthorized>
@@ -162,6 +176,8 @@
 @code {
     private int notifCount;
     private int inboxCount;
+    private bool isFounder;
+    private int pendingReportCount;
     private List<Community> communities = new();
     private RecentGroup[] recentGroups = Array.Empty<RecentGroup>();
 
@@ -178,6 +194,8 @@
     {
         var authState = await AuthStateProvider.GetAuthenticationStateAsync();
         var userId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        var email  = authState.User.FindFirst(ClaimTypes.Email)?.Value
+                  ?? authState.User.FindFirst("email")?.Value;
 
         await using var scope = ScopeFactory.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
@@ -191,6 +209,10 @@
 
         inboxCount = await db.Conversations
             .CountAsync(c => c.RecipientId == userId && c.Status == ConversationStatus.Pending);
+
+        isFounder = FounderSvc.IsFounder(email);
+        if (isFounder)
+            pendingReportCount = await db.Reports.CountAsync();
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -226,6 +248,9 @@
                 .CountAsync(n => n.RecipientUserId == userId && !n.IsRead);
             inboxCount = await db.Conversations
                 .CountAsync(c => c.RecipientId == userId && c.Status == ConversationStatus.Pending);
+
+            if (isFounder)
+                pendingReportCount = await db.Reports.CountAsync();
 
             StateHasChanged();
         });

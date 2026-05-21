@@ -217,3 +217,11 @@
     display: block;
     flex-shrink: 0;
 }
+
+.founder-link {
+    color: #f0c040 !important;
+}
+
+.founder-link:hover {
+    background-color: rgba(240,192,64,0.12) !important;
+}

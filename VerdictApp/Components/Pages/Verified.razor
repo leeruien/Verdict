@@ -1,0 +1,100 @@
+@page "/verified"
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Identity
+@using VerdictApp.Data
+@inject AuthenticationStateProvider AuthStateProvider
+@inject UserManager<ApplicationUser> UserManager
+@inject NavigationManager Nav
+
+<PageTitle>Email Verified — Verdict</PageTitle>
+
+<div class="verified-page">
+    <div class="verified-card">
+        <div class="verified-icon">✅</div>
+        <h1>You're all set!</h1>
+        <p class="verified-sub">Your email has been confirmed and you're now logged in.</p>
+
+        @if (displayName != null)
+        {
+            <p class="verified-name">Welcome, <strong>@displayName</strong></p>
+        }
+
+        <a class="go-home-btn" href="/">Start exploring ⚖</a>
+    </div>
+</div>
+
+@code {
+    private string? displayName;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var auth = await AuthStateProvider.GetAuthenticationStateAsync();
+        if (!auth.User.Identity?.IsAuthenticated ?? true)
+        {
+            Nav.NavigateTo("/login");
+            return;
+        }
+        var user = await UserManager.GetUserAsync(auth.User);
+        displayName = user?.DisplayName ?? user?.UserName;
+    }
+}
+
+<style>
+    .verified-page {
+        min-height: 80vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem 1rem;
+        font-family: Georgia, serif;
+    }
+
+    .verified-card {
+        width: 100%;
+        max-width: 420px;
+        background: white;
+        border: 1px solid #e8e8e8;
+        border-radius: 16px;
+        padding: 3rem 2rem;
+        box-shadow: 0 4px 24px rgba(0,0,0,0.06);
+        text-align: center;
+    }
+
+    .verified-icon {
+        font-size: 3.5rem;
+        margin-bottom: 1rem;
+    }
+
+    .verified-card h1 {
+        font-size: 1.8rem;
+        color: #052767;
+        margin: 0 0 0.5rem;
+    }
+
+    .verified-sub {
+        color: #666;
+        font-size: 0.95rem;
+        margin: 0 0 0.5rem;
+        line-height: 1.55;
+    }
+
+    .verified-name {
+        color: #444;
+        font-size: 0.95rem;
+        margin: 0 0 1.75rem;
+    }
+
+    .go-home-btn {
+        display: inline-block;
+        padding: 0.8rem 2.25rem;
+        background: #052767;
+        color: white;
+        border-radius: 8px;
+        text-decoration: none;
+        font-size: 1rem;
+        font-family: Georgia, serif;
+        transition: background 0.15s;
+    }
+
+    .go-home-btn:hover { background: #3a0647; }
+</style>
