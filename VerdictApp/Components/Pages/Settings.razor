@@ -10,6 +10,8 @@
 @inject ApplicationDbContext Db
 @inject NavigationManager Nav
 @inject IWebHostEnvironment Env
+@inject VerdictApp.Services.SupabaseAuthService SupabaseAuth
+@inject VerdictApp.Services.EmailSender EmailSender
 @attribute [Authorize]
 
 <PageTitle>Settings</PageTitle>
@@ -276,6 +278,9 @@ else
 
         if (result.Succeeded)
         {
+            // Sync Supabase Auth password and send the notification email
+            await SupabaseAuth.UpdatePasswordAsync(user!.Email!, currentPassword, newPassword);
+            await EmailSender.SendPasswordChangedAsync(user!, user!.Email!);
             passwordSuccess      = "Password updated.";
             currentPassword      = newPassword = confirmPassword = string.Empty;
             showPasswordForm     = false;
@@ -333,7 +338,10 @@ else
             Db.Dilemmas.Where(d => dilemmaIds.Contains(d.Id)));
 
         await Db.SaveChangesAsync();
+        var emailToDelete = user!.Email!;
         await UserManager.DeleteAsync(user!);
+        // Remove the Supabase Auth record so the email can be re-registered
+        await SupabaseAuth.DeleteUserAsync(emailToDelete);
 
         Nav.NavigateTo("/account/logout", forceLoad: true);
     }

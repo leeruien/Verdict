@@ -22,6 +22,9 @@ public class EmailSender : IEmailSender<ApplicationUser>
     public Task SendPasswordResetCodeAsync(ApplicationUser user, string email, string resetCode) =>
         SendAsync(email, "Your Verdict password reset code", $"<p>Your reset code is: <strong>{resetCode}</strong></p>");
 
+    public Task SendPasswordChangedAsync(ApplicationUser user, string email) =>
+        SendAsync(email, "Your Verdict password has been changed", PasswordChangedTemplate(user.DisplayName ?? email, email));
+
     private async Task SendAsync(string toEmail, string subject, string htmlBody)
     {
         var s = _config.GetSection("Email");
@@ -66,6 +69,15 @@ public class EmailSender : IEmailSender<ApplicationUser>
                 Reset password
             </a>
             <p style="color:#888;font-size:0.85rem;">If you didn't request this, you can safely ignore this email.</p>
+        </div>
+        """;
+
+    private static string PasswordChangedTemplate(string name, string email) => $"""
+        <div style="font-family:Georgia,serif;max-width:480px;margin:0 auto;padding:2rem;">
+            <h2 style="color:#052767">⚖ Verdict</h2>
+            <p>Hi <strong>{name}</strong>,</p>
+            <p>This is a confirmation that the password for your account <strong>{email}</strong> has just been changed.</p>
+            <p style="color:#888;font-size:0.85rem;">If you did not make this change, please contact support immediately.</p>
         </div>
         """;
 }
