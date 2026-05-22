@@ -27,7 +27,10 @@
             var hash = window.location.hash;
             if (hash && window.location.pathname === '/') {
                 var p = new URLSearchParams(hash.substring(1));
-                if (p.get('access_token') || p.get('error') || p.get('token_hash')) {
+                var type = p.get('type');
+                if (type === 'recovery') {
+                    window.location.replace('/auth/reset-password' + hash);
+                } else if (p.get('access_token') || p.get('error') || p.get('token_hash')) {
                     window.location.replace('/auth/confirm' + hash);
                 }
             }

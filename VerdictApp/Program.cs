@@ -44,6 +44,7 @@ builder.Services.AddTransient<EmailSender>();
 builder.Services.AddTransient<IEmailSender<ApplicationUser>>(sp => sp.GetRequiredService<EmailSender>());
 builder.Services.AddTransient<SupabaseAuthService>();
 builder.Services.AddSingleton<FounderService>();
+builder.Services.AddSingleton<ResetSignInCache>();
 builder.Services.AddHttpClient();
 builder.Services.AddAntiforgery();
 builder.Services.AddRazorPages();
@@ -124,6 +125,24 @@ app.MapGet("/auth/do-signin", async (
         user.EmailConfirmed = true;
         await userManager.UpdateAsync(user);
     }
+
+    await signInManager.SignInAsync(user, isPersistent: true);
+    return Results.Redirect("/");
+});
+
+// Called after a password reset — signs the user in using a short-lived one-time token
+// issued by the Blazor ResetPassword component (which can't write cookies itself).
+app.MapGet("/auth/post-reset-signin", async (
+    string token,
+    ResetSignInCache cache,
+    UserManager<ApplicationUser> userManager,
+    SignInManager<ApplicationUser> signInManager) =>
+{
+    var email = cache.Consume(token);
+    if (email == null) return Results.Redirect("/login?password_reset=true");
+
+    var user = await userManager.FindByEmailAsync(email);
+    if (user == null) return Results.Redirect("/login?password_reset=true");
 
     await signInManager.SignInAsync(user, isPersistent: true);
     return Results.Redirect("/");

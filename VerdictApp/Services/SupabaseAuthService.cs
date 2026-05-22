@@ -105,6 +105,105 @@ public class SupabaseAuthService
         return null;
     }
 
+    // ── Password reset ──────────────────────────────────────────────────────
+
+    /// <summary>Triggers Supabase to send a password-reset email to the user.</summary>
+    public async Task SendPasswordResetEmailAsync(string email, string redirectTo)
+    {
+        var client = _factory.CreateClient();
+        client.DefaultRequestHeaders.Add("apikey", AnonKey);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", AnonKey);
+
+        var body = JsonSerializer.Serialize(new { email, redirectTo });
+        await client.PostAsync(
+            $"{Url}/auth/v1/recover",
+            new StringContent(body, Encoding.UTF8, "application/json"));
+        // Fire-and-forget — Supabase returns 200 even for unknown emails (security best practice)
+    }
+
+    /// <summary>
+    /// Verifies a password-reset token_hash and updates the password in Supabase via the
+    /// user-facing API (so that the "Password changed" notification is triggered).
+    /// Returns the user's email on success, or null on failure.
+    /// </summary>
+    public async Task<string?> VerifyRecoveryAndUpdatePasswordAsync(string tokenHash, string newPassword)
+    {
+        // Step 1 — exchange the recovery token for an access token
+        var client = _factory.CreateClient();
+        client.DefaultRequestHeaders.Add("apikey", AnonKey);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", AnonKey);
+
+        var verifyBody = JsonSerializer.Serialize(new { token_hash = tokenHash, type = "recovery" });
+        var verifyResp = await client.PostAsync(
+            $"{Url}/auth/v1/verify",
+            new StringContent(verifyBody, Encoding.UTF8, "application/json"));
+
+        if (!verifyResp.IsSuccessStatusCode) return null;
+
+        var verifyJson = await verifyResp.Content.ReadAsStringAsync();
+        using var verifyDoc = JsonDocument.Parse(verifyJson);
+        var root = verifyDoc.RootElement;
+
+        var accessToken = root.TryGetProperty("access_token", out var t) ? t.GetString() : null;
+        string? email = null;
+        if (root.TryGetProperty("user", out var u) && u.TryGetProperty("email", out var e))
+            email = e.GetString();
+
+        if (accessToken == null || email == null) return null;
+
+        // Step 2 — update the password using the user's access token (triggers notification)
+        var updateClient = _factory.CreateClient();
+        updateClient.DefaultRequestHeaders.Add("apikey", AnonKey);
+        updateClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
+        var updateBody = JsonSerializer.Serialize(new { password = newPassword });
+        var updateResp = await updateClient.PutAsync(
+            $"{Url}/auth/v1/user",
+            new StringContent(updateBody, Encoding.UTF8, "application/json"));
+
+        if (updateResp.IsSuccessStatusCode) return email;
+
+        var errJson = await updateResp.Content.ReadAsStringAsync();
+        throw new Exception(ExtractSupabaseMessage(errJson));
+    }
+
+    private static string ExtractSupabaseMessage(string json)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            foreach (var field in new[] { "msg", "message", "error_description", "error" })
+                if (doc.RootElement.TryGetProperty(field, out var v) && v.ValueKind == JsonValueKind.String)
+                    return v.GetString() ?? json;
+        }
+        catch { }
+        return json;
+    }
+
+    /// <summary>
+    /// Updates the password using an already-issued access token (old Supabase hash-fragment flow).
+    /// Returns the user's email on success, or null on failure.
+    /// </summary>
+    public async Task<string?> UpdatePasswordWithAccessTokenAsync(string accessToken, string newPassword)
+    {
+        var email = await GetEmailFromAccessTokenAsync(accessToken);
+        if (email == null) return null;
+
+        var client = _factory.CreateClient();
+        client.DefaultRequestHeaders.Add("apikey", AnonKey);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
+        var body = JsonSerializer.Serialize(new { password = newPassword });
+        var resp = await client.PutAsync(
+            $"{Url}/auth/v1/user",
+            new StringContent(body, Encoding.UTF8, "application/json"));
+
+        if (resp.IsSuccessStatusCode) return email;
+
+        var errJson = await resp.Content.ReadAsStringAsync();
+        throw new Exception(ExtractSupabaseMessage(errJson));
+    }
+
     // ── Admin methods (require ServiceRoleKey) ──────────────────────────────
 
     private HttpClient AdminClient()
