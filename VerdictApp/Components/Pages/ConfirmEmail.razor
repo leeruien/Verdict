@@ -1,0 +1,142 @@
+@page "/auth/confirm"
+@rendermode InteractiveServer
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<PageTitle>Confirm Email — Verdict</PageTitle>
+
+<div class="confirm-page">
+    <div class="confirm-card">
+        <div class="confirm-icon">⚖</div>
+
+        @if (isError)
+        {
+            <h1>Link expired</h1>
+            <p class="confirm-sub">This confirmation link is invalid or has already been used.</p>
+            <a class="verify-btn secondary" href="/register">Register again</a>
+        }
+        else if (tokenHash != null || accessToken != null)
+        {
+            <h1>Confirm your email</h1>
+            <p class="confirm-sub">Click below to verify your email address and log in to Verdict.</p>
+            <button class="verify-btn" @onclick="DoSignIn" disabled="@isBusy">
+                @(isBusy ? "Verifying…" : "✅ Verify & Log in")
+            </button>
+        }
+        else
+        {
+            <p class="confirm-loading">Checking your link…</p>
+        }
+    </div>
+</div>
+
+@code {
+    private string? tokenHash;
+    private string? tokenType;
+    private string? accessToken;
+    private bool isError;
+    private bool isBusy;
+
+    protected override void OnInitialized()
+    {
+        var uri = new Uri(Nav.Uri);
+        var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
+
+        tokenHash = query["token_hash"];
+        tokenType = query["type"] ?? "email";
+
+        // Check for Supabase error redirected to this page
+        var error = query["error"];
+        if (!string.IsNullOrEmpty(error)) isError = true;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || tokenHash != null || isError) return;
+
+        // Older Supabase sends tokens in the URL hash fragment (#access_token=…)
+        // Hash is not sent to the server, so we read it client-side
+        var hash = await JS.InvokeAsync<string>("eval", "window.location.hash.substring(1)");
+        if (!string.IsNullOrEmpty(hash))
+        {
+            var p = System.Web.HttpUtility.ParseQueryString(hash);
+            accessToken = p["access_token"];
+            var hashError = p["error"];
+            if (!string.IsNullOrEmpty(hashError) || string.IsNullOrEmpty(accessToken))
+                isError = true;
+        }
+        else
+        {
+            isError = true;
+        }
+
+        StateHasChanged();
+    }
+
+    private void DoSignIn()
+    {
+        isBusy = true;
+        if (tokenHash != null)
+            Nav.NavigateTo($"/auth/do-signin?token_hash={Uri.EscapeDataString(tokenHash)}&type={tokenType}", forceLoad: true);
+        else if (accessToken != null)
+            Nav.NavigateTo($"/auth/do-signin?access_token={Uri.EscapeDataString(accessToken)}", forceLoad: true);
+    }
+}
+
+<style>
+    .confirm-page {
+        min-height: 80vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem 1rem;
+        font-family: Georgia, serif;
+    }
+
+    .confirm-card {
+        width: 100%;
+        max-width: 400px;
+        background: white;
+        border: 1px solid #e8e8e8;
+        border-radius: 16px;
+        padding: 3rem 2rem;
+        box-shadow: 0 4px 24px rgba(0,0,0,0.06);
+        text-align: center;
+    }
+
+    .confirm-icon { font-size: 2.5rem; margin-bottom: 1rem; }
+
+    .confirm-card h1 {
+        font-size: 1.6rem;
+        color: #052767;
+        margin: 0 0 0.6rem;
+    }
+
+    .confirm-sub {
+        color: #666;
+        font-size: 0.95rem;
+        line-height: 1.55;
+        margin: 0 0 1.75rem;
+    }
+
+    .verify-btn {
+        display: inline-block;
+        padding: 0.8rem 2rem;
+        background: #052767;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-size: 1rem;
+        font-family: Georgia, serif;
+        cursor: pointer;
+        text-decoration: none;
+        transition: background 0.15s;
+    }
+
+    .verify-btn:hover:not(:disabled) { background: #3a0647; }
+    .verify-btn:disabled { background: #aaa; cursor: not-allowed; }
+    .verify-btn.secondary { background: #f0f4ff; color: #052767; border: 1px solid #dce6ff; }
+    .verify-btn.secondary:hover { background: #dce6ff; }
+
+    .confirm-loading { color: #aaa; font-style: italic; }
+</style>

@@ -19,6 +19,20 @@
     <ReconnectModal />
     <script src="@Assets["_framework/blazor.web.js"]"></script>
     <script src="sidebar.js"></script>
+    <script>
+        // If Supabase redirects to the root with auth tokens/errors in the hash
+        // (e.g. /#error=otp_expired or /#access_token=…), forward to /auth/confirm
+        // so our confirmation page can handle it properly.
+        (function () {
+            var hash = window.location.hash;
+            if (hash && window.location.pathname === '/') {
+                var p = new URLSearchParams(hash.substring(1));
+                if (p.get('access_token') || p.get('error') || p.get('token_hash')) {
+                    window.location.replace('/auth/confirm' + hash);
+                }
+            }
+        })();
+    </script>
 </body>
 
 </html>
