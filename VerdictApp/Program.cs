@@ -76,6 +76,8 @@ app.MapGet("/auth/do-signin", async (
     string? token_hash, string? type, string? access_token,
     UserManager<ApplicationUser> userManager,
     SignInManager<ApplicationUser> signInManager,
+    IPasswordHasher<ApplicationUser> passwordHasher,
+    ApplicationDbContext db,
     SupabaseAuthService supabase) =>
 {
     string? email = null;
@@ -87,10 +89,37 @@ app.MapGet("/auth/do-signin", async (
 
     if (email == null) return Results.Redirect("/login?error=confirm");
 
+    // Check if the Identity user already exists (e.g. re-click of the same link)
     var user = await userManager.FindByEmailAsync(email);
-    if (user == null) return Results.Redirect("/login?error=confirm");
 
-    if (!user.EmailConfirmed)
+    if (user == null)
+    {
+        // First-time confirmation — create the Identity user from the pending registration
+        var pending = await db.PendingRegistrations
+            .FirstOrDefaultAsync(p => p.Email == email);
+
+        if (pending == null) return Results.Redirect("/login?error=confirm");
+
+        user = new ApplicationUser
+        {
+            UserName       = email,
+            Email          = email,
+            DisplayName    = pending.DisplayName,
+            EmailConfirmed = true,
+            SecurityStamp  = Guid.NewGuid().ToString()
+        };
+
+        var createResult = await userManager.CreateAsync(user);
+        if (!createResult.Succeeded) return Results.Redirect("/login?error=confirm");
+
+        // Restore the hashed password that was stored at registration time
+        user.PasswordHash = pending.PasswordHash;
+        await userManager.UpdateAsync(user);
+
+        db.PendingRegistrations.Remove(pending);
+        await db.SaveChangesAsync();
+    }
+    else if (!user.EmailConfirmed)
     {
         user.EmailConfirmed = true;
         await userManager.UpdateAsync(user);

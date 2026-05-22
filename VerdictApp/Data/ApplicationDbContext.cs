@@ -22,6 +22,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<Community> Communities { get; set; }
     public DbSet<Report> Reports { get; set; }
     public DbSet<Draft> Drafts { get; set; }
+    public DbSet<PendingRegistration> PendingRegistrations { get; set; }
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -44,6 +45,8 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             .IsUnique();
 
         builder.Entity<Report>().ToTable("Reports");
+        builder.Entity<PendingRegistration>().ToTable("PendingRegistrations")
+            .HasIndex(p => p.Email).IsUnique();
         builder.Entity<Draft>().ToTable("Drafts");
         builder.Entity<Report>()
             .HasIndex(r => new { r.ReporterUserId, r.DilemmaId });

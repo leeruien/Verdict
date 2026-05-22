@@ -2,10 +2,14 @@
 @using System.ComponentModel.DataAnnotations
 @using System.Web
 @using Microsoft.AspNetCore.Identity
+@using Microsoft.EntityFrameworkCore
 @using VerdictApp.Data
+@using VerdictApp.Models
 @using VerdictApp.Services
 @inject UserManager<ApplicationUser> UserManager
 @inject SignInManager<ApplicationUser> SignInManager
+@inject IPasswordHasher<ApplicationUser> PasswordHasher
+@inject ApplicationDbContext Db
 @inject NavigationManager Nav
 @inject VerdictApp.Services.SupabaseAuthService SupabaseAuth
 @inject VerdictApp.Services.EmailSender EmailSender
@@ -91,38 +95,53 @@
         error = null;
         isBusy = true;
 
-        if (await UserManager.FindByEmailAsync(model.Email) != null)
+        // Only block on confirmed Identity accounts — pending registrations can be retried
+        var existing = await UserManager.FindByEmailAsync(model.Email);
+        if (existing != null && existing.EmailConfirmed)
         {
             error = "An account with that email already exists.";
             isBusy = false;
             return;
         }
 
-        if (UserManager.Users.Any(u => u.DisplayName != null && u.DisplayName.ToLower() == model.DisplayName.ToLower()))
+        if (UserManager.Users.Any(u => u.DisplayName != null &&
+            u.DisplayName.ToLower() == model.DisplayName.ToLower()))
         {
             error = "That username is already taken.";
             isBusy = false;
             return;
         }
 
-        var user = new ApplicationUser
-        {
-            UserName = model.Email,
-            Email = model.Email,
-            DisplayName = model.DisplayName
-        };
-
-        var result = await UserManager.CreateAsync(user, model.Password);
-        if (!result.Succeeded)
-        {
-            error = string.Join(" ", result.Errors.Select(e => e.Description));
-            isBusy = false;
-            return;
-        }
+        // Hash password using Identity's hasher so we can store it safely
+        var passwordHash = PasswordHasher.HashPassword(new ApplicationUser(), model.Password);
 
         if (SupabaseAuth.IsConfigured)
         {
-            // Supabase Auth — triggers confirmation email automatically
+            // Upsert the pending registration — no Identity user created yet
+            var pending = await Db.PendingRegistrations
+                .FirstOrDefaultAsync(p => p.Email == model.Email);
+
+            if (pending == null)
+            {
+                pending = new VerdictApp.Models.PendingRegistration
+                {
+                    Id = Guid.NewGuid(),
+                    Email = model.Email,
+                    DisplayName = model.DisplayName,
+                    PasswordHash = passwordHash,
+                    CreatedAt = DateTime.UtcNow,
+                    ExpiresAt = DateTime.UtcNow.AddHours(24)
+                };
+                Db.PendingRegistrations.Add(pending);
+            }
+            else
+            {
+                pending.DisplayName  = model.DisplayName;
+                pending.PasswordHash = passwordHash;
+                pending.ExpiresAt    = DateTime.UtcNow.AddHours(24);
+            }
+            await Db.SaveChangesAsync();
+
             try
             {
                 var confirmUrl = $"{Nav.BaseUri}auth/confirm";
@@ -130,29 +149,8 @@
             }
             catch (Exception ex)
             {
-                await UserManager.DeleteAsync(user);
-                error = $"Could not send confirmation email: {ex.Message}";
-                isBusy = false;
-                return;
-            }
-
-            confirmedEmail = model.Email;
-            registrationComplete = true;
-            isBusy = false;
-        }
-        else if (EmailSender.IsConfigured)
-        {
-            // Fallback: custom SMTP
-            try
-            {
-                var token = await UserManager.GenerateEmailConfirmationTokenAsync(user);
-                var encoded = HttpUtility.UrlEncode(token);
-                var link = $"{Nav.BaseUri}account/confirm-email?userId={user.Id}&token={encoded}";
-                await EmailSender.SendConfirmationLinkAsync(user, user.Email!, link);
-            }
-            catch (Exception ex)
-            {
-                await UserManager.DeleteAsync(user);
+                Db.PendingRegistrations.Remove(pending);
+                await Db.SaveChangesAsync();
                 error = $"Could not send confirmation email: {ex.Message}";
                 isBusy = false;
                 return;
@@ -164,7 +162,20 @@
         }
         else
         {
-            // Neither configured (dev mode) — auto-confirm and sign in
+            // Dev mode — create Identity user immediately and sign in
+            var user = new ApplicationUser
+            {
+                UserName = model.Email,
+                Email = model.Email,
+                DisplayName = model.DisplayName
+            };
+            var result = await UserManager.CreateAsync(user, model.Password);
+            if (!result.Succeeded)
+            {
+                error = string.Join(" ", result.Errors.Select(e => e.Description));
+                isBusy = false;
+                return;
+            }
             var token = await UserManager.GenerateEmailConfirmationTokenAsync(user);
             await UserManager.ConfirmEmailAsync(user, token);
             await SignInManager.SignInAsync(user, isPersistent: true);
