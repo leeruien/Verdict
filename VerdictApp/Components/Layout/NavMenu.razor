@@ -87,21 +87,21 @@
             </NotAuthorized>
         </AuthorizeView>
 
-        <!-- Community section -->
-        <div class="communities-nav-section" @onclick:stopPropagation="true">
-            <hr class="nav-divider" />
+        <AuthorizeView>
+            <Authorized>
+                <!-- Community section -->
+                <div class="communities-nav-section" @onclick:stopPropagation="true">
+                    <hr class="nav-divider" />
 
-            <div class="nav-item px-3">
-                @foreach (var c in communities)
-                {
-                    <a class="nav-link community-link" href="/group/@c.Slug">
-                        <span class="nav-icon">@c.Icon</span>
-                        <span class="nav-label">@c.Name</span>
-                    </a>
-                }
+                    <div class="nav-item px-3">
+                        @foreach (var c in communities)
+                        {
+                            <a class="nav-link community-link" href="/group/@c.Slug">
+                                <span class="nav-icon">@c.Icon</span>
+                                <span class="nav-label">@c.Name</span>
+                            </a>
+                        }
 
-                <AuthorizeView>
-                    <Authorized>
                         @if (!showAddForm)
                         {
                             <button class="nav-link add-community-btn" @onclick="() => showAddForm = true">
@@ -127,32 +127,32 @@
                                 </div>
                             </div>
                         }
-                    </Authorized>
-                </AuthorizeView>
 
-                <a class="nav-link community-link explore-link" href="/explore">
-                    <span class="nav-icon">🔭</span>
-                    <span class="nav-label">Explore</span>
-                </a>
-            </div>
+                        <a class="nav-link community-link explore-link" href="/explore">
+                            <span class="nav-icon">🔭</span>
+                            <span class="nav-label">Explore</span>
+                        </a>
+                    </div>
 
-            <hr class="nav-divider" />
-        </div>
+                    <hr class="nav-divider" />
+                </div>
 
-        @if (recentGroups.Length > 0)
-        {
-            <div class="nav-item px-3">
-                <span class="nav-section-label">Recents</span>
-                @foreach (var r in recentGroups)
+                @if (recentGroups.Length > 0)
                 {
-                    <a class="nav-link community-link" href="/group/@r.Slug">
-                        <span class="nav-icon">@r.Icon</span>
-                        <span class="nav-label">@r.Name</span>
-                    </a>
+                    <div class="nav-item px-3">
+                        <span class="nav-section-label">Recents</span>
+                        @foreach (var r in recentGroups)
+                        {
+                            <a class="nav-link community-link" href="/group/@r.Slug">
+                                <span class="nav-icon">@r.Icon</span>
+                                <span class="nav-label">@r.Name</span>
+                            </a>
+                        }
+                    </div>
+                    <hr class="nav-divider" />
                 }
-            </div>
-            <hr class="nav-divider" />
-        }
+            </Authorized>
+        </AuthorizeView>
 
     </nav>
 </div>
