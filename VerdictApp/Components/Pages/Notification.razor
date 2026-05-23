@@ -87,11 +87,12 @@
 
     private string GetIcon(VerdictApp.Models.NotificationType type) => type switch
     {
-        NotificationType.Vote         => "🗳️",
-        NotificationType.Comment      => "💬",
-        NotificationType.ExpiringSoon => "⏰",
-        NotificationType.NewPost      => "✨",
-        _                             => "🔔"
+        NotificationType.Vote           => "🗳️",
+        NotificationType.Comment        => "💬",
+        NotificationType.ExpiringSoon   => "⏰",
+        NotificationType.NewPost        => "✨",
+        NotificationType.ContentRemoved => "🚫",
+        _                               => "🔔"
     };
 
     private string FormatTime(DateTime dt)

@@ -162,17 +162,16 @@ else
         {
             var did = r.DilemmaId.Value;
 
-            // Collect option IDs for vote cleanup
+            await NotificationSvc.NotifyPostRemovedAsync(r.ContentAuthorId, r.Title ?? "your post");
+
             var optionIds = await Db.DilemmaOptions
                 .Where(o => o.DilemmaId == did)
                 .Select(o => o.Id)
                 .ToListAsync();
 
-            // Remove dependents in FK order
             Db.Votes.RemoveRange(Db.Votes.Where(v => optionIds.Contains(v.DilemmaOptionId)));
             Db.Reports.RemoveRange(Db.Reports.Where(x => x.DilemmaId == did));
-            Db.Notifications.RemoveRange(Db.Notifications.Where(n => n.DilemmaId == did));
-            // Remove all comments (including nested replies via CommentId chain)
+            Db.Notifications.RemoveRange(Db.Notifications.Where(n => n.DilemmaId == did && n.Type != NotificationType.ContentRemoved));
             var commentIds = await Db.Comments.Where(c => c.DilemmaId == did).Select(c => c.Id).ToListAsync();
             Db.Reports.RemoveRange(Db.Reports.Where(x => x.CommentId != null && commentIds.Contains(x.CommentId!.Value)));
             Db.Comments.RemoveRange(Db.Comments.Where(c => c.DilemmaId == did));
@@ -185,7 +184,9 @@ else
             var comment = await Db.Comments.FindAsync(cid);
             if (comment != null)
             {
-                // Remove replies and their reports before the parent comment
+                var dilemmaTitle = (await Db.Dilemmas.FindAsync(comment.DilemmaId))?.Title ?? "a post";
+                await NotificationSvc.NotifyCommentRemovedAsync(r.ContentAuthorId, dilemmaTitle, comment.DilemmaId);
+
                 var replyIds = await Db.Comments.Where(c => c.ParentCommentId == cid).Select(c => c.Id).ToListAsync();
                 Db.Reports.RemoveRange(Db.Reports.Where(x => x.CommentId != null && replyIds.Contains(x.CommentId!.Value)));
                 Db.Comments.RemoveRange(Db.Comments.Where(c => c.ParentCommentId == cid));

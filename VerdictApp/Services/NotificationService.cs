@@ -53,6 +53,34 @@ public class NotificationService(ApplicationDbContext db)
         await db.SaveChangesAsync();
     }
 
+    public async Task NotifyPostRemovedAsync(string userId, string postTitle)
+    {
+        db.Notifications.Add(new Notification
+        {
+            Id = Guid.NewGuid(),
+            RecipientUserId = userId,
+            Type = NotificationType.ContentRemoved,
+            Message = $"Your post \"{postTitle}\" was removed for violating community guidelines.",
+            DilemmaId = null,
+            CreatedAt = DateTime.UtcNow
+        });
+        await db.SaveChangesAsync();
+    }
+
+    public async Task NotifyCommentRemovedAsync(string userId, string postTitle, Guid dilemmaId)
+    {
+        db.Notifications.Add(new Notification
+        {
+            Id = Guid.NewGuid(),
+            RecipientUserId = userId,
+            Type = NotificationType.ContentRemoved,
+            Message = $"Your comment on \"{postTitle}\" was removed for violating community guidelines.",
+            DilemmaId = dilemmaId,
+            CreatedAt = DateTime.UtcNow
+        });
+        await db.SaveChangesAsync();
+    }
+
     public async Task NotifyNewPostAsync(Dilemma dilemma, string posterUserId)
     {
         var subscriberIds = await db.CategorySubscriptions
