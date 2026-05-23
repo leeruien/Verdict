@@ -162,9 +162,6 @@ else
         {
             var did = r.DilemmaId.Value;
 
-            // Send notification before deletion (uses same SaveChanges — send first)
-            await NotificationSvc.NotifyPostRemovedAsync(r.Title ?? "your post", r.ContentAuthorId);
-
             // Collect option IDs for vote cleanup
             var optionIds = await Db.DilemmaOptions
                 .Where(o => o.DilemmaId == did)
@@ -188,13 +185,6 @@ else
             var comment = await Db.Comments.FindAsync(cid);
             if (comment != null)
             {
-                var dilemmaTitle = await Db.Dilemmas
-                    .Where(d => d.Id == comment.DilemmaId)
-                    .Select(d => d.Title)
-                    .FirstOrDefaultAsync() ?? "a post";
-                await NotificationSvc.NotifyCommentRemovedAsync(
-                    r.Body ?? "", dilemmaTitle, r.ContentAuthorId, comment.DilemmaId);
-
                 // Remove replies and their reports before the parent comment
                 var replyIds = await Db.Comments.Where(c => c.ParentCommentId == cid).Select(c => c.Id).ToListAsync();
                 Db.Reports.RemoveRange(Db.Reports.Where(x => x.CommentId != null && replyIds.Contains(x.CommentId!.Value)));

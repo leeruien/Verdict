@@ -74,46 +74,4 @@ public class NotificationService(ApplicationDbContext db)
         await db.SaveChangesAsync();
     }
 
-    public async Task NotifyPostRemovedAsync(string postTitle, string authorUserId)
-    {
-        var message = $"Your post \"{postTitle}\" was removed for violating community guidelines.";
-        var alreadySent = await db.Notifications.AnyAsync(n =>
-            n.RecipientUserId == authorUserId &&
-            n.Type == NotificationType.PostRemoved &&
-            n.Message == message);
-        if (alreadySent) return;
-
-        db.Notifications.Add(new Notification
-        {
-            Id = Guid.NewGuid(),
-            RecipientUserId = authorUserId,
-            Type = NotificationType.PostRemoved,
-            Message = message,
-            DilemmaId = null,
-            CreatedAt = DateTime.UtcNow
-        });
-        await db.SaveChangesAsync();
-    }
-
-    public async Task NotifyCommentRemovedAsync(string commentPreview, string dilemmaTitle, string authorUserId, Guid dilemmaId)
-    {
-        var preview = commentPreview.Length > 60 ? commentPreview[..60] + "…" : commentPreview;
-        var message = $"Your comment \"{preview}\" on \"{dilemmaTitle}\" was removed for violating community guidelines.";
-        var alreadySent = await db.Notifications.AnyAsync(n =>
-            n.RecipientUserId == authorUserId &&
-            n.Type == NotificationType.CommentRemoved &&
-            n.Message == message);
-        if (alreadySent) return;
-
-        db.Notifications.Add(new Notification
-        {
-            Id = Guid.NewGuid(),
-            RecipientUserId = authorUserId,
-            Type = NotificationType.CommentRemoved,
-            Message = message,
-            DilemmaId = dilemmaId,
-            CreatedAt = DateTime.UtcNow
-        });
-        await db.SaveChangesAsync();
-    }
 }
