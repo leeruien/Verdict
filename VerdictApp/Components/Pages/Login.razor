@@ -1,8 +1,14 @@
 @page "/login"
 @using System.ComponentModel.DataAnnotations
+@using System.Web
 @using Microsoft.AspNetCore.Identity
+@using Microsoft.EntityFrameworkCore
 @using VerdictApp.Data
 @inject SignInManager<ApplicationUser> SignInManager
+@inject UserManager<ApplicationUser> UserManager
+@inject ApplicationDbContext Db
+@inject VerdictApp.Services.SupabaseAuthService SupabaseAuth
+@inject VerdictApp.Services.EmailSender EmailSender
 @inject NavigationManager Nav
 
 <PageTitle>Login — Verdict</PageTitle>
@@ -27,8 +33,16 @@
         @if (notConfirmed)
         {
             <div class="banner warning">
-                Your email isn't verified yet.
-                <a href="/account/resend-confirmation?email=@Uri.EscapeDataString(model.Email)">Resend confirmation email</a>
+                <strong>📧 Verify your email to log in.</strong><br />
+                @if (emailSent)
+                {
+                    <span>A confirmation email has been sent to <strong>@model.Email</strong>. Check your inbox.</span>
+                }
+                else
+                {
+                    <span>Your email isn't verified yet. </span>
+                }
+                <button class="resend-inline-btn" @onclick="ResendVerificationEmail" disabled="@isBusy">Resend email</button>
             </div>
         }
 
@@ -89,6 +103,7 @@
     private bool isBusy;
     private bool showPassword;
     private bool notConfirmed;
+    private bool emailSent;
     private bool showConfirmedBanner;
     private bool showResentBanner;
     private bool showConfirmError;
@@ -111,6 +126,7 @@
     {
         error = null;
         notConfirmed = false;
+        emailSent = false;
         isBusy = true;
 
         var result = await SignInManager.PasswordSignInAsync(
@@ -130,14 +146,72 @@
         }
         else if (result.IsNotAllowed)
         {
+            // Identity user exists but email not confirmed
             notConfirmed = true;
+            var user = await UserManager.FindByEmailAsync(model.Email);
+            if (user != null)
+                emailSent = await SendIdentityConfirmationAsync(user);
         }
         else
         {
-            error = "Invalid email or password.";
+            // Check for unconfirmed Supabase-flow user (no Identity entry yet)
+            var pending = await Db.PendingRegistrations
+                .FirstOrDefaultAsync(p => p.Email == model.Email);
+            if (pending != null)
+            {
+                notConfirmed = true;
+                try
+                {
+                    await SupabaseAuth.ResendConfirmationEmailAsync(
+                        model.Email, $"{Nav.BaseUri}auth/confirm");
+                    emailSent = true;
+                }
+                catch { }
+            }
+            else
+            {
+                error = "Invalid email or password.";
+            }
         }
 
         isBusy = false;
+    }
+
+    private async Task ResendVerificationEmail()
+    {
+        if (string.IsNullOrWhiteSpace(model.Email) || isBusy) return;
+        isBusy = true;
+
+        var pending = await Db.PendingRegistrations
+            .FirstOrDefaultAsync(p => p.Email == model.Email);
+        if (pending != null)
+        {
+            try
+            {
+                await SupabaseAuth.ResendConfirmationEmailAsync(
+                    model.Email, $"{Nav.BaseUri}auth/confirm");
+                emailSent = true;
+            }
+            catch { }
+        }
+        else
+        {
+            var user = await UserManager.FindByEmailAsync(model.Email);
+            if (user != null && !user.EmailConfirmed)
+                emailSent = await SendIdentityConfirmationAsync(user);
+        }
+
+        isBusy = false;
+    }
+
+    private async Task<bool> SendIdentityConfirmationAsync(ApplicationUser user)
+    {
+        if (!EmailSender.IsConfigured) return false;
+        var token = await UserManager.GenerateEmailConfirmationTokenAsync(user);
+        var encoded = HttpUtility.UrlEncode(token);
+        var link = $"{Nav.BaseUri}account/confirm-email?userId={user.Id}&token={encoded}";
+        await EmailSender.SendConfirmationLinkAsync(user, user.Email!, link);
+        return true;
     }
 
     public class LoginModel
@@ -193,6 +267,23 @@
     .banner.warning { background: #fff8e1; color: #7a5800; border: 1px solid #ffe082; }
     .banner.error   { background: #fdf2f2; color: #c0392b; border: 1px solid #f5c6c6; }
     .banner a { color: inherit; font-weight: 600; }
+
+    .resend-inline-btn {
+        display: inline;
+        background: none;
+        border: none;
+        padding: 0;
+        margin-top: 0.35rem;
+        font-size: 0.85rem;
+        font-family: Georgia, serif;
+        color: #7a5800;
+        font-weight: 600;
+        text-decoration: underline;
+        cursor: pointer;
+    }
+
+    .resend-inline-btn:hover:not(:disabled) { color: #5a3e00; }
+    .resend-inline-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
     .form-field {
         display: flex;

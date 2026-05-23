@@ -107,6 +107,26 @@ public class SupabaseAuthService
 
     // ── Password reset ──────────────────────────────────────────────────────
 
+    /// <summary>Resends the signup confirmation email via Supabase.</summary>
+    public async Task ResendConfirmationEmailAsync(string email, string emailRedirectTo)
+    {
+        if (!IsConfigured) return;
+        var client = _factory.CreateClient();
+        client.DefaultRequestHeaders.Add("apikey", AnonKey);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", AnonKey);
+
+        var body = JsonSerializer.Serialize(new
+        {
+            type = "signup",
+            email,
+            options = new { emailRedirectTo }
+        });
+
+        await client.PostAsync(
+            $"{Url}/auth/v1/resend",
+            new StringContent(body, Encoding.UTF8, "application/json"));
+    }
+
     /// <summary>Triggers Supabase to send a password-reset email to the user.</summary>
     public async Task SendPasswordResetEmailAsync(string email, string redirectTo)
     {
