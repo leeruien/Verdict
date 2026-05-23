@@ -31,6 +31,7 @@ else
 
         <div class="stab-bar">
             <button class="@StabClass("profile")"  @onclick='() => Switch("profile")'>Profile</button>
+            <button class="@StabClass("privacy")"  @onclick='() => Switch("privacy")'>Privacy</button>
             <button class="@StabClass("security")" @onclick='() => Switch("security")'>Security</button>
             <button class="@StabClass("account")"  @onclick='() => Switch("account")'>Account</button>
         </div>
@@ -75,6 +76,38 @@ else
                 @if (!string.IsNullOrWhiteSpace(profileSuccess)) { <p class="msg success">@profileSuccess</p> }
                 <button class="btn-primary" @onclick="SaveProfile" disabled="@isBusy">Save</button>
 
+            </div>
+        }
+
+        @if (activeTab == "privacy")
+        {
+            <div class="settings-section">
+                <p class="section-desc">Control what others can see when they visit your profile.</p>
+
+                <div class="toggle-row">
+                    <div class="toggle-info">
+                        <span class="toggle-label">Hide my posts</span>
+                        <span class="toggle-hint">Others cannot see the dilemmas you've posted.</span>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" @bind="hidePostsFromProfile" />
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+
+                <div class="toggle-row">
+                    <div class="toggle-info">
+                        <span class="toggle-label">Hide my comments</span>
+                        <span class="toggle-hint">Others cannot see your comments on dilemmas.</span>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" @bind="hideCommentsFromProfile" />
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+
+                @if (!string.IsNullOrWhiteSpace(privacySuccess)) { <p class="msg success">@privacySuccess</p> }
+                <button class="btn-primary" @onclick="SavePrivacy" disabled="@isBusy">Save</button>
             </div>
         }
 
@@ -161,6 +194,11 @@ else
     private string? passwordError;
     private string? passwordSuccess;
 
+    // Privacy tab
+    private bool    hidePostsFromProfile;
+    private bool    hideCommentsFromProfile;
+    private string? privacySuccess;
+
     // Account tab
     private bool    confirmDelete;
     private string  deletePassword = string.Empty;
@@ -172,17 +210,29 @@ else
         user = await UserManager.GetUserAsync(authState.User);
         if (user != null)
         {
-            newDisplayName = user.DisplayName ?? string.Empty;
-            newBio         = user.Bio         ?? string.Empty;
+            newDisplayName         = user.DisplayName ?? string.Empty;
+            newBio                 = user.Bio         ?? string.Empty;
+            hidePostsFromProfile    = user.HidePostsFromProfile;
+            hideCommentsFromProfile = user.HideCommentsFromProfile;
         }
     }
 
     private void Switch(string tab)
     {
         activeTab        = tab;
-        profileError     = profileSuccess = passwordError = passwordSuccess = photoError = deleteError = null;
+        profileError     = profileSuccess = passwordError = passwordSuccess = photoError = deleteError = privacySuccess = null;
         confirmDelete    = false;
         showPasswordForm = false;
+    }
+
+    private async Task SavePrivacy()
+    {
+        isBusy = true;
+        user!.HidePostsFromProfile    = hidePostsFromProfile;
+        user!.HideCommentsFromProfile = hideCommentsFromProfile;
+        await UserManager.UpdateAsync(user);
+        privacySuccess = "Privacy settings saved.";
+        isBusy = false;
     }
 
     private async Task HandlePhoto(InputFileChangeEventArgs e)
@@ -548,4 +598,64 @@ else
         gap: 0.6rem;
         margin-top: 0.6rem;
     }
+
+    .section-desc {
+        font-size: 0.85rem;
+        color: #888;
+        margin: 0 0 1rem;
+    }
+
+    .toggle-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: 0.75rem 0;
+        border-bottom: 1px solid #f0f0f0;
+    }
+
+    .toggle-row:last-of-type { border-bottom: none; margin-bottom: 0.75rem; }
+
+    .toggle-info {
+        display: flex;
+        flex-direction: column;
+        gap: 0.15rem;
+    }
+
+    .toggle-label { font-size: 0.9rem; font-weight: 600; color: #333; }
+    .toggle-hint  { font-size: 0.78rem; color: #aaa; }
+
+    .toggle-switch {
+        position: relative;
+        display: inline-block;
+        width: 42px;
+        height: 24px;
+        flex-shrink: 0;
+        cursor: pointer;
+    }
+
+    .toggle-switch input { opacity: 0; width: 0; height: 0; }
+
+    .toggle-slider {
+        position: absolute;
+        inset: 0;
+        background: #ccc;
+        border-radius: 24px;
+        transition: background 0.2s;
+    }
+
+    .toggle-slider::before {
+        content: "";
+        position: absolute;
+        width: 18px;
+        height: 18px;
+        left: 3px;
+        top: 3px;
+        background: white;
+        border-radius: 50%;
+        transition: transform 0.2s;
+    }
+
+    .toggle-switch input:checked + .toggle-slider { background: #052767; }
+    .toggle-switch input:checked + .toggle-slider::before { transform: translateX(18px); }
 </style>

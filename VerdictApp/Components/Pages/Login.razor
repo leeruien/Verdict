@@ -116,7 +116,7 @@
         var result = await SignInManager.PasswordSignInAsync(
             model.Email, model.Password,
             isPersistent: model.RememberMe,
-            lockoutOnFailure: false);
+            lockoutOnFailure: true);
 
         if (result.Succeeded)
         {
@@ -124,7 +124,11 @@
             return;
         }
 
-        if (result.IsNotAllowed)
+        if (result.IsLockedOut)
+        {
+            error = "Too many failed attempts. Please try again in 15 minutes.";
+        }
+        else if (result.IsNotAllowed)
         {
             notConfirmed = true;
         }

@@ -66,47 +66,70 @@ else
         </div>
 
         <div class="profile-tabs">
-            <button class="@TabClass("posts")" @onclick='() => activeTab = "posts"'>
-                Posts <span class="badge">@posts.Count</span>
-            </button>
-            <button class="@TabClass("comments")" @onclick='() => activeTab = "comments"'>
-                Comments <span class="badge">@comments.Count</span>
-            </button>
+            @if (!postsHidden)
+            {
+                <button class="@TabClass("posts")" @onclick='() => activeTab = "posts"'>
+                    Posts <span class="badge">@posts.Count</span>
+                </button>
+            }
+            @if (!commentsHidden)
+            {
+                <button class="@TabClass("comments")" @onclick='() => activeTab = "comments"'>
+                    Comments <span class="badge">@comments.Count</span>
+                </button>
+            }
         </div>
 
         <div class="profile-content">
-            @if (activeTab == "posts")
+            @if (postsHidden && commentsHidden)
             {
-                @if (!posts.Any())
+                <p class="empty-state">This user has made their activity private.</p>
+            }
+            else if (activeTab == "posts")
+            {
+                @if (postsHidden)
                 {
-                    <p class="empty-state">No dilemmas posted yet.</p>
+                    <p class="empty-state">This user has hidden their posts.</p>
                 }
-                @foreach (var post in posts)
+                else
                 {
-                    <div class="card" style="cursor:pointer" @onclick='() => Nav.NavigateTo($"/dilemma/{post.Id}")'>
-                        <div class="card-title">@post.Title</div>
-                        <div class="card-meta">
-                            @post.CreatedAt.ToLocalTime().ToString("MMM d, yyyy") ·
-                            @post.Options.Sum(o => o.Votes.Count) votes ·
-                            @post.Comments.Count comments
+                    @if (!posts.Any())
+                    {
+                        <p class="empty-state">No dilemmas posted yet.</p>
+                    }
+                    @foreach (var post in posts)
+                    {
+                        <div class="card" style="cursor:pointer" @onclick='() => Nav.NavigateTo($"/dilemma/{post.Id}")'>
+                            <div class="card-title">@post.Title</div>
+                            <div class="card-meta">
+                                @post.CreatedAt.ToLocalTime().ToString("MMM d, yyyy") ·
+                                @post.Options.Sum(o => o.Votes.Count) votes ·
+                                @post.Comments.Count comments
+                            </div>
                         </div>
-                    </div>
+                    }
                 }
             }
-
-            @if (activeTab == "comments")
+            else if (activeTab == "comments")
             {
-                @if (!comments.Any())
+                @if (commentsHidden)
                 {
-                    <p class="empty-state">No comments yet.</p>
+                    <p class="empty-state">This user has hidden their comments.</p>
                 }
-                @foreach (var comment in comments)
+                else
                 {
-                    <div class="card" style="cursor:pointer" @onclick='() => Nav.NavigateTo($"/dilemma/{comment.DilemmaId}")'>
-                        <div class="card-title">@comment.Dilemma.Title</div>
-                        <div class="card-body-text">@comment.Body</div>
-                        <div class="card-meta">@comment.CreatedAt.ToLocalTime().ToString("MMM d, yyyy")</div>
-                    </div>
+                    @if (!comments.Any())
+                    {
+                        <p class="empty-state">No comments yet.</p>
+                    }
+                    @foreach (var comment in comments)
+                    {
+                        <div class="card" style="cursor:pointer" @onclick='() => Nav.NavigateTo($"/dilemma/{comment.DilemmaId}")'>
+                            <div class="card-title">@comment.Dilemma.Title</div>
+                            <div class="card-body-text">@comment.Body</div>
+                            <div class="card-meta">@comment.CreatedAt.ToLocalTime().ToString("MMM d, yyyy")</div>
+                        </div>
+                    }
                 }
             }
         </div>
@@ -121,6 +144,8 @@ else
     private List<Dilemma> posts    = new();
     private List<Comment> comments = new();
     private string activeTab       = "posts";
+    private bool postsHidden;
+    private bool commentsHidden;
 
     private bool showCompose  = false;
     private string composeBody = "";
@@ -136,18 +161,31 @@ else
         profileUser = await UserManager.FindByIdAsync(UserId);
         if (profileUser == null) { Nav.NavigateTo("/"); return; }
 
-        posts = await Db.Dilemmas
-            .Where(d => d.UserId == UserId)
-            .Include(d => d.Options).ThenInclude(o => o.Votes)
-            .Include(d => d.Comments)
-            .OrderByDescending(d => d.CreatedAt)
-            .ToListAsync();
+        var isOwnProfile = currentUserId == UserId;
+        postsHidden    = !isOwnProfile && profileUser.HidePostsFromProfile;
+        commentsHidden = !isOwnProfile && profileUser.HideCommentsFromProfile;
 
-        comments = await Db.Comments
-            .Where(c => c.UserId == UserId && c.ParentCommentId == null)
-            .Include(c => c.Dilemma)
-            .OrderByDescending(c => c.CreatedAt)
-            .ToListAsync();
+        if (!postsHidden)
+        {
+            posts = await Db.Dilemmas
+                .Where(d => d.UserId == UserId)
+                .Include(d => d.Options).ThenInclude(o => o.Votes)
+                .Include(d => d.Comments)
+                .OrderByDescending(d => d.CreatedAt)
+                .ToListAsync();
+        }
+
+        if (!commentsHidden)
+        {
+            comments = await Db.Comments
+                .Where(c => c.UserId == UserId && c.ParentCommentId == null)
+                .Include(c => c.Dilemma)
+                .OrderByDescending(c => c.CreatedAt)
+                .ToListAsync();
+        }
+
+        if (postsHidden && !commentsHidden)
+            activeTab = "comments";
     }
 
     private async Task HandleMessageClick()

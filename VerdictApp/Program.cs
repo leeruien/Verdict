@@ -25,6 +25,9 @@ builder.Services
         {
             options.User.RequireUniqueEmail = true;
             options.SignIn.RequireConfirmedEmail = true;
+            options.Lockout.MaxFailedAccessAttempts = 5;
+            options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
+            options.Lockout.AllowedForNewUsers = true;
         }
     )
     .AddEntityFrameworkStores<ApplicationDbContext>()
