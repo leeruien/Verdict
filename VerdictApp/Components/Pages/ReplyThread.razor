@@ -71,7 +71,7 @@
                 }
 
                 <div class="reply-action-row">
-                    @if (CurrentUserId != null && !IsExpiredVal)
+                    @if (CurrentUserId != null)
                     {
                         <button class="reply-btn" @onclick="() => ToggleInlineReply(reply.Id)">↩ Reply</button>
                     }

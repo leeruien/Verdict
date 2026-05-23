@@ -5,5 +5,7 @@ public enum NotificationType
     Vote,
     Comment,
     ExpiringSoon,
-    NewPost
+    NewPost,
+    PostRemoved,
+    CommentRemoved
 }

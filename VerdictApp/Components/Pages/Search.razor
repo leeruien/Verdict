@@ -110,6 +110,11 @@
 
     protected override async Task OnInitializedAsync()
     {
+        var customCommunities = await Db.Communities.ToListAsync();
+        foreach (var c in customCommunities)
+            if (allCategories.All(x => x.Value != c.Slug))
+                allCategories.Add(new(c.Slug, c.Name, c.Icon));
+
         await RunSearch();
     }
 
