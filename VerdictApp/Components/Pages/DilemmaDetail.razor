@@ -232,7 +232,7 @@ else
         <div class="section">
             <h2 class="section-title">Comments (@dilemma.Comments.Count(c => c.Id != null))</h2>
 
-            @if (currentUserId != null && !IsExpired())
+            @if (currentUserId != null)
             {
                 <div class="comment-form">
                     @if (replyingToCommentId != null)
@@ -325,7 +325,7 @@ else
                         }
 
                         <div class="reply-action-row">
-                            @if (currentUserId != null && !IsExpired())
+                            @if (currentUserId != null)
                             {
                                 <button class="reply-btn" @onclick="() => ToggleCommentReply(comment.Id)">
                                     ↩ Reply

@@ -266,20 +266,20 @@ app.MapGet("/debug/users", async (IServiceProvider services) =>
         return Results.Problem(detail: ex.ToString());
     }
 });
-// test user
+// Seed the default test user and confirm all @test.com accounts
 using (var scope = app.Services.CreateScope())
 {
     var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
 
-    var email = "test@test.com";
-    var existing = await userManager.FindByEmailAsync(email);
+    var testEmail = "test@test.com";
+    var existing = await userManager.FindByEmailAsync(testEmail);
 
     if (existing == null)
     {
         var user = new ApplicationUser
         {
-            UserName = email,
-            Email = email,
+            UserName = testEmail,
+            Email = testEmail,
             DisplayName = "TestUser",
             EmailConfirmed = true
         };
@@ -287,9 +287,19 @@ using (var scope = app.Services.CreateScope())
     }
     else if (!existing.EmailConfirmed)
     {
-        // Ensure the seeded test user is always confirmed
         existing.EmailConfirmed = true;
         await userManager.UpdateAsync(existing);
+    }
+
+    // Auto-confirm any existing @test.com accounts that aren't confirmed yet
+    var unconfirmedTestUsers = userManager.Users
+        .Where(u => u.Email != null && u.Email.EndsWith("@test.com") && !u.EmailConfirmed)
+        .ToList();
+
+    foreach (var u in unconfirmedTestUsers)
+    {
+        u.EmailConfirmed = true;
+        await userManager.UpdateAsync(u);
     }
 }
 

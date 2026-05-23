@@ -115,6 +115,31 @@
         // Hash password using Identity's hasher so we can store it safely
         var passwordHash = PasswordHasher.HashPassword(new ApplicationUser(), model.Password);
 
+        var isTestEmail = model.Email.EndsWith("@test.com", StringComparison.OrdinalIgnoreCase);
+
+        if (isTestEmail || !SupabaseAuth.IsConfigured)
+        {
+            // Test accounts and dev mode — create and confirm immediately, no email needed
+            var user = new ApplicationUser
+            {
+                UserName = model.Email,
+                Email = model.Email,
+                DisplayName = model.DisplayName
+            };
+            var result = await UserManager.CreateAsync(user, model.Password);
+            if (!result.Succeeded)
+            {
+                error = string.Join(" ", result.Errors.Select(e => e.Description));
+                isBusy = false;
+                return;
+            }
+            var token = await UserManager.GenerateEmailConfirmationTokenAsync(user);
+            await UserManager.ConfirmEmailAsync(user, token);
+            await SignInManager.SignInAsync(user, isPersistent: true);
+            Nav.NavigateTo("/");
+            return;
+        }
+
         if (SupabaseAuth.IsConfigured)
         {
             // Upsert the pending registration — no Identity user created yet
