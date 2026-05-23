@@ -11,6 +11,7 @@
 @inject IJSRuntime JS
 @inject VerdictApp.Services.BadgeNotifier BadgeNotifier
 @inject VerdictApp.Services.RecentGroupsNotifier RecentNotifier
+@inject VerdictApp.Services.NotificationService NotificationSvc
 
 @{
     var cat = categories.FirstOrDefault(c => c.Value == Category);
@@ -338,6 +339,11 @@ else
         };
         Db.Votes.Add(vote);
         await Db.SaveChangesAsync();
+
+        var voter = await UserManager.FindByIdAsync(currentUserId);
+        if (voter != null && dilemma.UserId != currentUserId)
+            await NotificationSvc.NotifyVoteAsync(voter.DisplayName ?? voter.Email ?? "Someone", dilemma);
+
         userVotedOptionIds.Add(option.Id);
 
         dilemmas = await Db.Dilemmas

@@ -10,6 +10,7 @@
 @inject ApplicationDbContext Db
 @inject NavigationManager Nav
 @inject VerdictApp.Services.BadgeNotifier BadgeNotifier
+@inject VerdictApp.Services.NotificationService NotificationSvc
 
 <div class="home-page">
 
@@ -293,6 +294,10 @@
 
         Db.Votes.Add(vote);
         await Db.SaveChangesAsync();
+
+        var voter = await UserManager.FindByIdAsync(currentUserId);
+        if (voter != null && dilemma.UserId != currentUserId)
+            await NotificationSvc.NotifyVoteAsync(voter.DisplayName ?? voter.Email ?? "Someone", dilemma);
 
         userVotedOptionIds.Add(option.Id);
         await LoadDilemmas();
