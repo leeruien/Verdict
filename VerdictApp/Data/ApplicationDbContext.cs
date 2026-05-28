@@ -33,6 +33,10 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
         builder.Entity<Vote>().ToTable("Votes");
         builder.Entity<Comment>().ToTable("Comments");
         builder.Entity<Notification>().ToTable("Notifications");
+        builder.Entity<Notification>()
+            .HasOne(n => n.Recipient)
+            .WithMany()
+            .HasForeignKey(n => n.RecipientUserId);
         builder.Entity<CategorySubscription>().ToTable("CategorySubscriptions")
             .HasIndex(s => new { s.UserId, s.Category }).IsUnique();
         builder.Entity<Conversation>().ToTable("Conversations");
