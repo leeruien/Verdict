@@ -1,0 +1,51 @@
+@startuml seq_1_registration
+title Flow 1 – User Registration & Email Verification
+
+skinparam sequence {
+    ArrowColor #1A237E
+    ActorBorderColor #1565C0
+    ActorBackgroundColor #E3F2FD
+    ParticipantBorderColor #4527A0
+    ParticipantBackgroundColor #EDE7F6
+    DatabaseBorderColor #2E7D32
+    DatabaseBackgroundColor #E8F5E9
+    LifeLineBorderColor #AAAAAA
+    LifeLineBackgroundColor #F8F9FC
+    NoteBackgroundColor #FFF9C4
+    NoteBorderColor #F9A825
+}
+skinparam shadowing false
+skinparam roundcorner 8
+
+actor       "User"                  as user
+participant "Blazor Server"         as blazor
+database    "PostgreSQL\n(Supabase)" as pg
+participant "Supabase Auth API"     as supaauth #FBE9E7
+participant "User's Email Inbox"    as inbox    #FBE9E7
+
+== Registration ==
+
+user    ->  blazor    : Fill & submit Register form
+blazor  ->  pg        : FindByEmailAsync() + check username
+pg      --> blazor    : Not found — OK to proceed
+blazor  ->  blazor    : Hash password\n(Identity PasswordHasher)
+blazor  ->  pg        : INSERT PendingRegistration\n(email, displayName, passwordHash, expiresAt)
+pg      --> blazor    : Saved
+blazor  ->  supaauth  : SignUpAsync(email, password, confirmUrl)
+supaauth -> inbox     : Send confirmation email (magic link)
+supaauth --> blazor   : 200 OK
+blazor  --> user      : Show "Check your inbox" screen
+
+== User clicks confirmation link in email ==
+
+user    ->  blazor    : GET /auth/do-signin?token_hash=…
+blazor  ->  supaauth  : VerifyTokenHashAsync(token_hash, "email")
+supaauth --> blazor   : Return verified email address
+blazor  ->  pg        : SELECT PendingRegistration WHERE email = ?
+pg      --> blazor    : Return pending record + passwordHash
+blazor  ->  pg        : INSERT AspNetUsers\n(EmailConfirmed = true, restore PasswordHash)
+blazor  ->  pg        : DELETE PendingRegistration
+blazor  ->  blazor    : SignInAsync() — write auth cookie
+blazor  --> user      : Redirect to /  (logged in)
+
+@enduml

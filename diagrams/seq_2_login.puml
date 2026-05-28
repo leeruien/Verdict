@@ -1,0 +1,61 @@
+@startuml seq_2_login
+title Flow 2 – Login (happy path · unverified email · account lockout)
+
+skinparam sequence {
+    ArrowColor #1A237E
+    ActorBorderColor #1565C0
+    ActorBackgroundColor #E3F2FD
+    ParticipantBorderColor #4527A0
+    ParticipantBackgroundColor #EDE7F6
+    DatabaseBorderColor #2E7D32
+    DatabaseBackgroundColor #E8F5E9
+    LifeLineBorderColor #AAAAAA
+    LifeLineBackgroundColor #F8F9FC
+    NoteBackgroundColor #FFF9C4
+    NoteBorderColor #F9A825
+}
+skinparam shadowing false
+skinparam roundcorner 8
+
+actor       "User"               as user
+participant "Blazor Server"      as blazor
+participant "ASP.NET Identity"   as identity
+database    "PostgreSQL"         as pg
+participant "Supabase Auth API"  as supaauth #FBE9E7
+
+user -> blazor    : Submit Login form (email, password)
+blazor -> identity : PasswordSignInAsync(email, pwd,\nlockoutOnFailure: true)
+identity -> pg    : SELECT AspNetUsers WHERE Email = ?
+
+alt [A] Happy path – credentials valid, email confirmed
+    pg --> identity   : User found, EmailConfirmed = true
+    identity -> pg    : UPDATE AccessFailedCount = 0
+    identity --> blazor : result.Succeeded = true
+    blazor --> user   : Write auth cookie → Redirect /
+end
+
+alt [B] Wrong password (attempt < 5) – increment failure counter
+    pg --> identity   : User found
+    identity -> pg    : UPDATE AccessFailedCount += 1
+    identity --> blazor : result.Failed
+    blazor --> user   : Show "Invalid email or password"
+end
+
+alt [C] 5th failed attempt – account locked for 15 minutes
+    pg --> identity   : User found, AccessFailedCount = 4
+    identity -> pg    : SET LockoutEnd = NOW() + 15 min
+    identity --> blazor : result.IsLockedOut = true
+    blazor --> user   : Show "Too many failed attempts.\nTry again in 15 minutes."
+end
+
+alt [D] Email not confirmed – auto-resend verification email
+    pg --> identity   : User found, EmailConfirmed = false
+    identity --> blazor : result.IsNotAllowed = true
+    blazor -> pg      : SELECT PendingRegistration WHERE email = ?
+    pg --> blazor     : Return pending record
+    blazor -> supaauth : ResendConfirmationEmailAsync(email)
+    supaauth --> blazor : 200 OK
+    blazor --> user   : Show "Verify your email –\nconfirmation sent to [email]"
+end
+
+@enduml

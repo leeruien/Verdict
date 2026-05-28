@@ -1,0 +1,88 @@
+@startuml seq_4_messaging
+title Flow 4 – Direct Messaging (Request -> Accept -> Chat)
+
+skinparam sequence {
+    ArrowColor #1A237E
+    ActorBorderColor #1565C0
+    ActorBackgroundColor #E3F2FD
+    ParticipantBorderColor #4527A0
+    ParticipantBackgroundColor #EDE7F6
+    DatabaseBorderColor #2E7D32
+    DatabaseBackgroundColor #E8F5E9
+    LifeLineBorderColor #AAAAAA
+    LifeLineBackgroundColor #F8F9FC
+    NoteBackgroundColor #FFF9C4
+    NoteBorderColor #F9A825
+}
+skinparam shadowing false
+skinparam roundcorner 8
+
+actor       "User A (Sender)"    as sender
+actor       "User B (Recipient)" as recipient
+participant "Blazor Server"      as blazor
+database    "PostgreSQL"         as pg
+
+== Sender initiates a message request ==
+
+sender  ->  blazor  : Visit /user/{userId} — click "Message"
+blazor  ->  pg      : SELECT Conversations WHERE\n(initiatorId=A AND recipientId=B)\nOR (initiatorId=B AND recipientId=A)
+pg      --> blazor  : No existing conversation
+
+note over blazor : No conversation exists;\nshow compose box inline
+
+sender  ->  blazor  : Type message body + click "Send Request"
+blazor  ->  pg      : INSERT Conversation\n(initiatorId=A, recipientId=B,\nstatus=Pending)
+blazor  ->  pg      : INSERT DirectMessage\n(conversationId, senderId=A, body)
+pg      --> blazor  : Saved
+blazor  --> sender  : Redirect to /inbox/{conversationId}
+
+note over sender : Sees "Waiting for User B\nto accept your request"
+
+== Recipient views inbox and accepts ==
+
+recipient ->  blazor  : Open /inbox
+blazor    ->  pg      : SELECT Conversations WHERE\nrecipientId=B OR initiatorId=B\n(with Initiator, Recipient, Messages)
+pg        --> blazor  : Return conversations list
+blazor    --> recipient : Show pending request from User A\n(highlighted in Requests section)
+
+recipient ->  blazor  : Click conversation card
+blazor    ->  pg      : SELECT Conversation + Messages\nWHERE id = ?
+pg        --> blazor  : Return conversation (Status=Pending)
+blazor    --> recipient : Show request banner + initial message
+
+alt Recipient accepts the request
+    recipient ->  blazor  : Click "Accept"
+    blazor    ->  pg      : UPDATE Conversation\nSET status = Accepted
+    pg        --> blazor  : Saved
+    blazor    ->  blazor  : BadgeNotifier.NotifyAsync()
+    blazor    --> recipient : Show full chat view
+end
+
+alt Recipient declines the request
+    recipient ->  blazor  : Click "Decline"
+    blazor    ->  pg      : UPDATE Conversation\nSET status = Declined
+    pg        --> blazor  : Saved
+    blazor    ->  blazor  : BadgeNotifier.NotifyAsync()
+    blazor    --> recipient : Redirect to /inbox
+    note over sender : Sees "This message request\nwas declined" if they open the chat
+end
+
+== Ongoing conversation (both users can now message freely) ==
+
+sender    ->  blazor  : Open /inbox/{conversationId}
+blazor    ->  pg      : SELECT Conversation + Messages\nORDER BY SentAt ASC
+pg        --> blazor  : Return accepted conversation + messages
+blazor    --> sender  : Render full chat thread
+
+sender    ->  blazor  : Type reply + press Send (or Enter)
+blazor    ->  pg      : INSERT DirectMessage\n(conversationId, senderId=A, body, sentAt)
+pg        --> blazor  : Saved
+blazor    ->  pg      : Reload conversation messages
+blazor    --> sender  : Append new bubble to chat
+
+recipient ->  blazor  : Open /inbox/{conversationId}
+blazor    ->  pg      : SELECT Conversation + Messages\nORDER BY SentAt ASC
+pg        --> blazor  : Return full message history
+blazor    --> recipient : Render full chat thread with all messages
+
+@enduml

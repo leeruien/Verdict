@@ -1,0 +1,66 @@
+@startuml seq_3_dilemma_vote
+title Flow 3 – Post Dilemma → Vote → Comment → Notifications
+
+skinparam sequence {
+    ArrowColor #1A237E
+    ActorBorderColor #1565C0
+    ActorBackgroundColor #E3F2FD
+    ParticipantBorderColor #4527A0
+    ParticipantBackgroundColor #EDE7F6
+    DatabaseBorderColor #2E7D32
+    DatabaseBackgroundColor #E8F5E9
+    LifeLineBorderColor #AAAAAA
+    LifeLineBackgroundColor #F8F9FC
+    NoteBackgroundColor #FFF9C4
+    NoteBorderColor #F9A825
+}
+skinparam shadowing false
+skinparam roundcorner 8
+
+actor       "User A (Poster)"        as poster
+actor       "User B (Voter)"         as voter
+participant "Blazor Server"          as blazor
+participant "NotificationService"    as notif  #EDE7F6
+database    "PostgreSQL"             as pg
+
+== Poster creates a dilemma ==
+
+poster  ->  blazor  : Submit new dilemma\n(title, options, category, expiry)
+blazor  ->  pg      : INSERT Dilemma + DilemmaOptions
+pg      --> blazor  : Saved with new Guid
+blazor  ->  notif   : NotifyNewPostAsync(dilemma, posterUserId)
+notif   ->  pg      : SELECT CategorySubscriptions\nWHERE category = ? AND userId != poster
+pg      --> notif   : Return subscriber list
+notif   ->  pg      : INSERT Notification per subscriber\n(Type = NewPost)
+blazor  --> poster  : Redirect to /dilemma/{id}
+
+== Voter views & votes on the dilemma ==
+
+voter   ->  blazor  : Navigate to /dilemma/{id}
+blazor  ->  pg      : SELECT Dilemma + Options + Votes\n+ Comments (with Users)
+pg      --> blazor  : Return full dilemma graph
+blazor  --> voter   : Render dilemma page
+
+voter   ->  blazor  : CastVote(selectedOption)
+blazor  ->  pg      : INSERT Vote (userId, dilemmaOptionId)
+blazor  ->  notif   : NotifyVoteAsync(voterName, dilemma)
+notif   ->  pg      : UPSERT Notification for poster\n(Type = Vote – merges multiple voters)
+blazor  ->  pg      : Reload dilemma (fresh vote counts)
+blazor  --> voter   : Update vote bars in UI
+
+== Voter posts a comment ==
+
+voter   ->  blazor  : PostComment(body)
+blazor  ->  pg      : INSERT Comment\n(userId, dilemmaId, body, createdAt)
+blazor  ->  notif   : NotifyCommentAsync(voterName, dilemma, userId)
+notif   ->  pg      : INSERT Notification for poster\n(Type = Comment)
+blazor  --> voter   : Refresh comments section
+
+== Poster views notifications ==
+
+poster  ->  blazor  : Open /notification
+blazor  ->  pg      : SELECT Notifications\nWHERE recipientUserId = poster\nORDER BY createdAt DESC
+pg      --> blazor  : Vote + Comment notifications
+blazor  --> poster  : Show notification feed\n(vote notification, comment notification)
+
+@enduml
